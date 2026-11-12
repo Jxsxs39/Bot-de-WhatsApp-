@@ -88,10 +88,12 @@ export class Database {
   async addXp(userId, amount) {
     if (!userId) throw new TypeError('Se requiere userId.');
     await this.ensureUser(userId);
+
     await this.db.run(
       'UPDATE users SET xp = xp + ?, level = CAST((xp + ?) / 100 AS INTEGER) + 1 WHERE id = ?',
       [amount, amount, userId]
     );
+
     return await this.getUser(userId);
   }
 
