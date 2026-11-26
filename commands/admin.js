@@ -1,20 +1,42 @@
-import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {readFile,writeFile,mkdir,rename} from 'node:fs/promises';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {randomBytes} from 'node:crypto';
 const run=promisify(execFile);
 const files=new Set(['general.js','economy.js','stickers.js']);
 const pending=new Map();
-// Solo cuentas autorizadas explícitamente, en privado. Nunca se confía en el destinatario de un mensaje propio.
-export function isAdmin(ctx) {
-  return !ctx.rawMessage?.key?.fromMe && !ctx.chatId.endsWith('@g.us') &&
-    (process.env.BOT_OWNER_JIDS || '').split(',').map(x=>x.trim()).includes(ctx.userId);
+// El propietario principal se configura en Render y no puede eliminarse por chat.
+const primary=()=>process.env.BOT_PRIMARY_OWNER?.replace(/^\+/,'').replace(/\s|-/g,'')+'@s.whatsapp.net';
+const ownerFile=()=>process.env.BOT_OWNERS_FILE || 'data/owners.json';
+async function owners(){
+  try {const list=JSON.parse(await readFile(ownerFile(),'utf8'));if(!Array.isArray(list)) throw new Error('Formato de owners inválido');return list;}
+  catch(e){if(e.code==='ENOENT') return [];throw e;}
 }
-export const adminNames=new Set(['getcode','setcode','savefile','test','update','restart','reload','logs']);
+function privateSender(ctx){
+  return !ctx.rawMessage?.key?.fromMe && !ctx.chatId.endsWith('@g.us') && /^\d+@s\.whatsapp\.net$/.test(ctx.userId);
+}
+export async function isAdmin(ctx){
+  return privateSender(ctx) && (ctx.userId===primary() || (await owners()).includes(ctx.userId));
+}
+export const adminNames=new Set(['getcode','setcode','savefile','test','update','restart','reload','logs','setowner','delowner']);
 export async function handleAdmin(ctx) {
-  if(!isAdmin(ctx)) return ctx.reply('Acceso administrativo denegado.');
+  if(!await isAdmin(ctx)) return ctx.reply('Acceso administrativo denegado.');
   const [file,token]=ctx.args;
   const cmd=ctx.command;
+  if(cmd==='setowner' || cmd==='delowner'){
+    if(ctx.userId!==primary()) return ctx.reply('Solo el propietario principal puede administrar owners.');
+    const number=ctx.args.join('').replace(/^\+/,'').replace(/-/g,'');
+    if(!/^\d{8,15}$/.test(number)) return ctx.reply('Indica el número internacional.');
+    const jid=number+'@s.whatsapp.net';
+    if(jid===primary()) return ctx.reply('El propietario principal no se puede modificar.');
+    const list=new Set(await owners());
+    if(cmd==='setowner') list.add(jid); else list.delete(jid);
+    const path=ownerFile();
+    await mkdir((await import('node:path')).dirname(path),{recursive:true,mode:0o700});
+    await writeFile(path+'.tmp',JSON.stringify([...list]),{mode:0o600});
+    await rename(path+'.tmp',path);
+    return ctx.reply(cmd==='setowner'?'Owner agregado.':'Owner eliminado.');
+  }
   if(cmd==='getcode' || cmd==='setcode' || cmd==='savefile' || cmd==='test'){
     if(!files.has(file)) return ctx.reply('Archivos permitidos: '+[...files].join(', '));
     if(cmd==='getcode'){
