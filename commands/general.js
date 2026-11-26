@@ -11,7 +11,7 @@ function plainMetadata(value,maxLength=120) {
 export async function searchWikimediaImages(query,fetchImpl=globalThis.fetch) {
  const url=new URL('https://commons.wikimedia.org/w/api.php');
  for(const [key,value] of Object.entries({
-  action:'query',generator:'search',gsrsearch:query,gsrnamespace:'6',gsrlimit:'12',
+  action:'query',generator:'search',gsrsearch:query,gsrnamespace:'6',gsrlimit:'50',
   prop:'imageinfo',iiprop:'url|extmetadata',iiurlwidth:'900',format:'json'
  })) url.searchParams.set(key,value);
  const response=await fetchImpl(url,{headers:{'user-agent':'HistoriaReissBot/1.0 (WhatsApp image search)'} ,signal:AbortSignal.timeout(12_000)});
@@ -36,8 +36,41 @@ export async function searchWikimediaImages(query,fetchImpl=globalThis.fetch) {
     imageUrl:parsedUrl.href,
     title:plainMetadata(metadata.ObjectName?.value||page.title.replace(/^File:/,'')),
     artist:plainMetadata(metadata.Artist?.value||metadata.Attribution?.value||'Autor no indicado'),
-    license:plainMetadata(metadata.LicenseShortName?.value||'Licencia libre',40),
+    license:plainMetadata(metadata.LicenseShortName?.value||'',40),
     descriptionUrl:parsedDescription.href
+   };
+  })
+  .filter(Boolean)
+  .filter((image,index,images)=>images.findIndex(item=>item.imageUrl===image.imageUrl)===index)
+  .slice(0,IMAGE_SEARCH_LIMIT);
+}
+
+async function searchWikipediaImages(query,fetchImpl=globalThis.fetch) {
+ const url=new URL('https://es.wikipedia.org/w/api.php');
+ for(const [key,value] of Object.entries({
+  action:'query',generator:'search',gsrsearch:query,gsrlimit:'20',
+  prop:'pageimages',piprop:'thumbnail',pithumbsize:'900',format:'json'
+ })) url.searchParams.set(key,value);
+ const response=await fetchImpl(url,{headers:{'user-agent':'HistoriaReissBot/1.0 (WhatsApp image search)'},signal:AbortSignal.timeout(12_000)});
+ if(!response.ok) throw new Error(`Wikipedia image search returned HTTP ${response.status}`);
+ const data=await response.json();
+ return Object.values(data.query?.pages||{})
+  .sort((a,b)=>(a.index||0)-(b.index||0))
+  .map(page=>{
+   let imageUrl;
+   let descriptionUrl;
+   try {
+    imageUrl=new URL(page.thumbnail?.source);
+    descriptionUrl=new URL(page.fullurl);
+   } catch {return null;}
+   if(imageUrl.protocol!=='https:' || !['thumb.wikimedia.org','upload.wikimedia.org'].includes(imageUrl.hostname)) return null;
+   if(descriptionUrl.protocol!=='https:' || descriptionUrl.hostname!=='es.wikipedia.org') return null;
+   return {
+    imageUrl:imageUrl.href,
+    title:plainMetadata(page.title||'Imagen relacionada'),
+    artist:'',
+    license:'',
+    descriptionUrl:descriptionUrl.href
    };
   })
   .filter(Boolean)
@@ -83,10 +116,23 @@ export default [
   pinterestUrl.searchParams.set('q',query);
   try {
    const images=await searchWikimediaImages(query);
-   if(!images.length) return reply(`No encontré fotos con licencia libre para “${query}”. Busca más ideas en Pinterest:\n${pinterestUrl.href}`);
-   await reply(`Encontré ${images.length} foto${images.length===1?'':'s'} relacionadas con “${query}”. Las imágenes vienen de Wikimedia Commons; más ideas en Pinterest:\n${pinterestUrl.href}`);
+   if(images.length<IMAGE_SEARCH_LIMIT) {
+    try {
+     const additionalImages=await searchWikipediaImages(query);
+     for(const image of additionalImages) {
+      if(!images.some(existing=>existing.imageUrl===image.imageUrl)) images.push(image);
+      if(images.length===IMAGE_SEARCH_LIMIT) break;
+     }
+    } catch(error) {
+     console.error('[PIN] Falló la búsqueda complementaria de Wikipedia:',error?.name||'Error');
+     if(!images.length) throw error;
+    }
+   }
+   if(!images.length) return reply(`No encontré imágenes para “${query}”. Busca más ideas en Pinterest:\n${pinterestUrl.href}`);
+   await reply(`Encontré ${images.length} foto${images.length===1?'':'s'} relacionadas con “${query}”. Más ideas en Pinterest:\n${pinterestUrl.href}`);
    for(const image of images) {
-    await replyWithImage(image.imageUrl,`📷 ${image.title}\n© ${image.artist} · ${image.license}\nFuente: ${image.descriptionUrl}`);
+    const attribution=image.artist||image.license?`\n© ${image.artist||'Autor no indicado'}${image.license?` · ${image.license}`:''}`:'';
+    await replyWithImage(image.imageUrl,`📷 ${image.title}${attribution}\nFuente: ${image.descriptionUrl}`);
    }
   } catch(error) {
    console.error('[PIN] Falló la búsqueda de imágenes:',error?.name||'Error');

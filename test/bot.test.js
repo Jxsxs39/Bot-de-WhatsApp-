@@ -108,8 +108,15 @@ test('.pin busca el tema indicado en Pinterest y valida la entrada',async()=>{
   }]
  };
  const fetchMock=mock.method(globalThis,'fetch',async url=>{
-  assert.equal(new URL(url).searchParams.get('gsrsearch'),'vestidos de verano');
-  return {ok:true,json:async()=>({query:{pages}})};
+  const parsedUrl=new URL(url);
+  if(parsedUrl.hostname==='commons.wikimedia.org') {
+   assert.equal(parsedUrl.searchParams.get('gsrlimit'),'50');
+   return {ok:true,json:async()=>({query:{pages:parsedUrl.searchParams.get('gsrsearch')==='vestidos de verano'?pages:{}}})};
+  }
+  assert.equal(parsedUrl.hostname,'es.wikipedia.org');
+  return {ok:true,json:async()=>({query:{pages:{
+   1:{index:1,title:'Playa',fullurl:'https://es.wikipedia.org/wiki/Playa',thumbnail:{source:'https://upload.wikimedia.org/wikipedia/commons/beach.jpg'}}
+  }}})};
  });
  try {
   const sent=[];
@@ -130,9 +137,19 @@ test('.pin busca el tema indicado en Pinterest y valida la entrada',async()=>{
 
   await handler.handleMessage({
    key:{remoteJid:'123@s.whatsapp.net'},
+   message:{conversation:'.pin contexto sin archivos commons'}
+  });
+  assert.equal(sent.length,6);
+  assert.match(sent[4][1].text,/1 foto relacionada/);
+  assert.doesNotMatch(sent[4][1].text,/licencia/);
+  assert.equal(sent[5][1].image.url,'https://upload.wikimedia.org/wikipedia/commons/beach.jpg');
+  assert.match(sent[5][1].caption,/Fuente: https:\/\/es\.wikipedia\.org\/wiki\/Playa/);
+
+  await handler.handleMessage({
+   key:{remoteJid:'123@s.whatsapp.net'},
    message:{conversation:'.pin'}
   });
-  assert.match(sent[4][1].text,/Uso: \.pin/);
+  assert.match(sent[6][1].text,/Uso: \.pin/);
  }finally{fetchMock.mock.restore();await db.close();}
 });
 test('respuestas conservan código y logs sin decoración',()=>{
