@@ -110,12 +110,12 @@ export async function handleAdmin(ctx) {
   pending.delete(key);
   if(cmd==='update'){
     const hook=process.env.RENDER_DEPLOY_HOOK;
-    if(!hook) return ctx.reply('Configura RENDER_DEPLOY_HOOK en Render.');
+    if(!hook) return ctx.reply('El servicio de actualización no está configurado.');
     const url=new URL(hook);
     if(url.protocol!=='https:' || url.hostname!=='api.render.com' || !url.pathname.startsWith('/deploy/')) return ctx.reply('Hook no válido.');
     const result=await fetch(url,{method:'POST',redirect:'error',signal:AbortSignal.timeout(15000)});
-    return ctx.reply(result.ok?'Despliegue solicitado. Revisa Render.':'Render rechazó la solicitud.');
+    return ctx.reply(result.ok?'Actualización solicitada.':'No se pudo solicitar la actualización.');
   }
-  await ctx.reply('Reinicio solicitado. Render debe supervisar el proceso.');
+  await ctx.reply('Reinicio solicitado.');
   setTimeout(()=>process.kill(process.pid,'SIGTERM'),500).unref();
 }
