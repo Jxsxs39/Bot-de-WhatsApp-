@@ -1,14 +1,14 @@
 name: Pruebas del bot
 on:
   push:
-    branches: [test]
+    branches: [test, main]
   pull_request:
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
       - run: npm install
@@ -22,5 +22,6 @@ jobs:
           path: |
             audit.json
             package-lock.json
+      - run: npm audit --audit-level=high
       - run: npm test
       - run: node --check index.js
