@@ -29,7 +29,10 @@ async function connect() {
   if(stopping) return;
   const sock=makeWASocket({version,auth:state,logger:pino({level:'silent'}),browser:['Ubuntu','Chrome','22.04']});
   socket=sock;
-  const handler=createCommandHandler(sock,db);
+  // Recarga solo la conexión actual, conservando la sesión y la base de datos.
+  const handler=createCommandHandler(sock,db,()=>{
+    setTimeout(()=>{if(!stopping && socket===sock) sock.end(undefined);},500).unref();
+  });
   let pairingRequested=false;
   // Espera la señal QR de Baileys: indica que el servidor está listo para vincular.
   const requestCode=async()=>{
