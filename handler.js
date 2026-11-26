@@ -1,4 +1,5 @@
 import { commands } from './commands/index.js';
+import { normalizeMessageContent } from '@whiskeysockets/baileys';
 
 function normalizeJid(jid) {
   return typeof jid === 'string' ? jid.replace(/:\d+@/, '@') : undefined;
@@ -14,7 +15,14 @@ export function parseMessage(msg, selfJids = []) {
   const isGroup = chatId.endsWith('@g.us');
   const raw = isGroup ? (key.participantAlt || key.participant) : (key.remoteJidAlt || chatId);
   if (!raw || !/@(s\.whatsapp\.net|lid)$/.test(raw)) return null;
-  const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').trim();
+  const content = normalizeMessageContent(msg.message);
+  const text = (
+    content?.conversation ||
+    content?.extendedTextMessage?.text ||
+    content?.imageMessage?.caption ||
+    content?.videoMessage?.caption ||
+    ''
+  ).trim();
   // El prefijo . distingue comandos del texto normal.
   const match = /^\.(\S+)(?:\s+(.*))?$/s.exec(text);
   let userId = normalizeJid(raw);
@@ -57,7 +65,21 @@ export function createCommandHandler(sock, db) {
       console.log('[COMANDO]', cmd ? ctx.command : 'desconocido');
       if (!cmd) return await reply('❌ Comando no encontrado. Escribe .menu.');
       stage='ejecución o envío';
-      await cmd.run({ ...ctx, db, reply, replyWithImage, commands });
+      const replyWithSticker = async (sticker, isAnimated = false) => {
+        const result = await sock.sendMessage(ctx.chatId, { sticker, isAnimated });
+        console.log('[RESPUESTA] Sticker enviado al chat');
+        return result;
+      };
+      const replyWithAudio = async audio => {
+        const result = await sock.sendMessage(ctx.chatId, {
+          audio,
+          mimetype: 'audio/ogg; codecs=opus',
+          ptt: false
+        });
+        console.log('[RESPUESTA] Audio enviado al chat');
+        return result;
+      };
+      await cmd.run({ ...ctx, db, reply, replyWithImage, replyWithSticker, replyWithAudio, commands, sock, rawMessage: msg });
       console.log('[COMANDO] Finalizado');
     } catch (error) {
       console.error('[ERROR]',stage,error?.name ?? 'Error',error?.code ?? error?.output?.statusCode ?? 'sin código');

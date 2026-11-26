@@ -8,6 +8,8 @@ test('identidad de grupo y mensajes normales',()=>{
  assert.equal(parseMessage(msg).command,undefined);
  assert.equal(parseMessage({...msg,message:{conversation:'.hola'}}).command,'hola');
  assert.equal(parseMessage({...msg,message:{conversation:'+hola'}}).command,undefined);
+ assert.equal(parseMessage({...msg,message:{videoMessage:{caption:'.s1'}}}).command,'s1');
+ assert.equal(parseMessage({...msg,message:{imageMessage:{caption:'.s2'}}}).command,'s2');
  assert.equal(parseMessage({...msg,key:{...msg.key,fromMe:true}}),null);
  const ownCommand={...msg,key:{...msg.key,fromMe:true},message:{conversation:'.hola'}};
  assert.equal(parseMessage(ownCommand,['456:2@s.whatsapp.net']).userId,'456@s.whatsapp.net');
@@ -56,5 +58,7 @@ test('saludo e historia responden con imágenes y el menú usa prefijo punto',as
   assert.ok(sent.slice(0,2).every(([, message])=>message.image?.url && message.caption));
   assert.match(sent[0][1].caption,/\.menu/);
   assert.match(sent[2][1].text,/• \.hola/);
+  assert.match(sent[2][1].text,/• \.s1/);
+  assert.match(sent[2][1].text,/• \.s2/);
  }finally{await db.close();}
 });
