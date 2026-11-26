@@ -9,6 +9,9 @@ test('identidad de grupo y mensajes normales',()=>{
  assert.equal(parseMessage({...msg,message:{conversation:'.hola'}}).command,'hola');
  assert.equal(parseMessage({...msg,message:{conversation:'+hola'}}).command,undefined);
  assert.equal(parseMessage({...msg,key:{...msg.key,fromMe:true}}),null);
+ const ownCommand={...msg,key:{...msg.key,fromMe:true},message:{conversation:'.hola'}};
+ assert.equal(parseMessage(ownCommand,['456:2@s.whatsapp.net']).userId,'456@s.whatsapp.net');
+ assert.equal(parseMessage(ownCommand,['789@s.whatsapp.net']),null);
 });
 test('premios concurrentes y usuarios independientes',async()=>{
  const db=await new Database(':memory:').init();
@@ -25,6 +28,20 @@ test('mensaje normal no genera respuesta ni error',async()=>{
  try{const sent=[];const handler=createCommandHandler({sendMessage:async(...args)=>sent.push(args)},db);
  await handler.handleMessage({key:{remoteJid:'123@s.whatsapp.net'},message:{conversation:'hola'}});
  assert.equal(sent.length,0);assert.equal((await db.getStats('123@s.whatsapp.net')).messages,1);
+ }finally{await db.close();}
+});
+test('comandos propios de la cuenta vinculada sí reciben respuesta',async()=>{
+ const db=await new Database(':memory:').init();
+ try {
+  const sent=[];
+  const handler=createCommandHandler({user:{id:'456:2@s.whatsapp.net'},sendMessage:async(...args)=>sent.push(args)},db);
+  await handler.handleMessage({
+   key:{remoteJid:'123@g.us',participant:'456:2@s.whatsapp.net',fromMe:true},
+   message:{conversation:'.hola'}
+  });
+  assert.equal(sent.length,1);
+  assert.ok(sent[0][1].image?.url);
+  assert.equal((await db.getStats('456@s.whatsapp.net')).messages,1);
  }finally{await db.close();}
 });
 test('saludo e historia responden con imágenes y el menú usa prefijo punto',async()=>{

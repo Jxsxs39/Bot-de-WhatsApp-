@@ -28,6 +28,7 @@ Si sqlite3 necesita compilarse en Termux, instala python, make y clang. Si falla
 ## Comandos
 .hola, .menu, .historia, .dato, .perfil, .stats, .work, .daily.
 Work tiene espera de 5 minutos y daily de 24 horas. Los juegos, stickers y administración todavía no están implementados.
+También se aceptan comandos con prefijo `.` enviados desde la cuenta vinculada; sus mensajes propios sin prefijo se ignoran para evitar respuestas en bucle.
 
 ## Seguridad
 Desvincula inmediatamente la sesión que se publicó anteriormente desde WhatsApp. Crea una nueva. Borrar archivos de una rama no borra el historial Git ni las copias existentes. No reutilices las credenciales publicadas. No subas node_modules, sesiones, bases de datos ni .env. Antes de actualizar, respalda tus datos localmente y no uses la misma sesión en dos procesos. Las estadísticas antiguas guardadas por grupo no se pueden repartir automáticamente entre participantes.
