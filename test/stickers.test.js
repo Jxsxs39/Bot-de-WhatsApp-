@@ -128,8 +128,10 @@ test('video conversion retries with a shorter clip after timing out', async () =
         streams: [{ codec_name: 'opus', sample_rate: '48000', channels: 1 }]
       }), stderr: '' };
     }
-    if (args.includes('format=duration')) return { stdout: '30', stderr: '' };
-    if (args.includes('stream=codec_type')) return { stdout: 'audio', stderr: '' };
+    if (args.includes('format=duration:stream=codec_type')) return {
+      stdout: JSON.stringify({ format: { duration: '30' }, streams: [{ codec_type: 'audio' }] }),
+      stderr: ''
+    };
     if (args.includes('null')) return { stdout: '', stderr: '' };
     if (args.includes('-c:v')) {
       const duration = Number(args[args.indexOf('-t') + 1]);
@@ -153,6 +155,46 @@ test('video conversion retries with a shorter clip after timing out', async () =
   assert.equal(audioDuration, 10);
   assert.equal(result.duration, 10);
   assert.equal(result.audio.toString(), 'OggS-fake-audio');
+});
+
+test('.s1 estimates a shorter duration instead of retrying every quality', async () => {
+  const encoded = [];
+  let audioDuration;
+  const processRunner = async (_program, args) => {
+    if (args.includes('format=duration:format=format_name:stream=codec_name,sample_rate,channels')) {
+      return { stdout: JSON.stringify({
+        format: { duration: audioDuration, format_name: 'ogg' },
+        streams: [{ codec_name: 'opus', sample_rate: '48000', channels: 1 }]
+      }), stderr: '' };
+    }
+    if (args.includes('format=duration:stream=codec_type')) return {
+      stdout: JSON.stringify({ format: { duration: '25' }, streams: [{ codec_type: 'audio' }] }),
+      stderr: ''
+    };
+    if (args.includes('null')) return { stdout: '', stderr: '' };
+    if (args.includes('-c:v')) {
+      const duration = Number(args[args.indexOf('-t') + 1]);
+      encoded.push({
+        duration,
+        quality: args[args.indexOf('-quality') + 1],
+        compression: args[args.indexOf('-compression_level') + 1]
+      });
+      await writeFile(args[args.length - 1], Buffer.alloc(duration === 25 ? 1_000_000 : 450_000));
+      return { stdout: '', stderr: '' };
+    }
+    if (args.includes('-c:a')) {
+      audioDuration = Number(args[args.indexOf('-t') + 1]);
+      await writeFile(args[args.length - 1], Buffer.from('OggS-fake-audio'));
+      return { stdout: '', stderr: '' };
+    }
+    assert.fail(`Unexpected process args: ${args.join(' ')}`);
+  };
+  const result = await createStickerMedia(Buffer.from('0000ftypisom'), 'video', true, processRunner);
+  assert.deepEqual(encoded.map(({ duration }) => duration), [25, 11]);
+  assert.ok(encoded.every(({ quality }) => quality === '40'));
+  assert.ok(encoded.every(({ compression }) => compression === '2'));
+  assert.equal(result.duration, 11);
+  assert.equal(audioDuration, 11);
 });
 
 test('audio sticker conversion caps audio at 25 seconds', async () => {
