@@ -29,11 +29,14 @@ export const adminNames=new Set(['getcode','setcode','savefile','test','update',
 // Una sola política controla el menú y la ejecución administrativa.
 const primaryOnly=new Set(['setowner','delowner']);
 export function visibleAdminNames(priority){return [...adminNames].filter(name=>priority>=90 && (priority>=100 || !primaryOnly.has(name)));}
-export function adminMenuLines(){return [...adminNames].map(n=>'• .'+n+' — '+(n==='admin'?'Todos':primaryOnly.has(n)?'Solo owner principal':'Solo owners'));}
+export function adminMenuLines(){return [...adminNames].map(n=>'• .'+n+' — '+(n==='admin'?'Todos':primaryOnly.has(n)?'Solo owner principal':n==='reload'?'Owners o dueño del socket':'Solo owners'));}
 export async function handleAdmin(ctx) {
   if(ctx.command==='admin') return ctx.reply('👑 *Administración*\n\n'+adminMenuLines().join('\n'));
   const priority=await ownerPriority(ctx);
-  if(priority<90) return ctx.reply('Acceso administrativo denegado.');
+  // El dueño del socket se verifica con la identidad de la sesión vinculada.
+  const socketIds=[ctx.sock?.user?.id,ctx.sock?.user?.lid,ctx.sock?.user?.phoneNumber].filter(x=>typeof x==='string').map(x=>x.replace(/:\d+@/,'@'));
+  const socketOwner=authenticatedSender(ctx) && socketIds.includes(ctx.userId);
+  if(priority<90 && !(ctx.command==='reload' && socketOwner)) return ctx.reply('Acceso administrativo denegado.');
   if(primaryOnly.has(ctx.command) && priority<100) return ctx.reply('Solo el propietario principal puede ejecutar este comando.');
   const [file,token]=ctx.args;
   const cmd=ctx.command;
