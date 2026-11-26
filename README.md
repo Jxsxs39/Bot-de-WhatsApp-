@@ -22,7 +22,7 @@ Si sqlite3 necesita compilarse en Termux, instala python, make y clang. Si falla
 - handler.js: interpreta el prefijo +, separa chat y usuario, ejecuta comandos.
 - database.js: guarda monedas, XP y estadísticas en SQLite.
 - commands/: comandos separados por función.
-- package.json: dependencias y scripts. package-lock.json fija las versiones; se debe subir una vez regenerado con npm install.
+- package.json: dependencias y scripts. package-lock.json fija las versiones verificadas; conserva el archivo en Git y actualízalo junto con package.json.
 - .gitignore: evita publicar archivos privados o generados.
 
 ## Comandos

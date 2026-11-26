@@ -22,18 +22,22 @@ export default class Database {
     }
     return this;
   }
+  // INSERT OR IGNORE conserva monedas y experiencia de perfiles existentes.
   async ensureUser(id) {
     if (!id) throw new TypeError('Falta usuario');
     const now=new Date().toISOString();
     await this.db.run('INSERT OR IGNORE INTO users (id,firstSeenAt,lastSeenAt) VALUES (?,?,?)',id,now,now);
   }
+  // Incremento SQL: evita sobrescribir el contador con una lectura antigua.
   async registerMessage(id) {
     await this.ensureUser(id);
     await this.db.run('UPDATE users SET messages=messages+1,lastSeenAt=? WHERE id=?',new Date().toISOString(),id);
   }
+  // Devuelve valores iniciales si todavía no existe un perfil.
   async getStats(id) {
     return await this.db.get('SELECT messages,coins,xp,level FROM users WHERE id=?',id) || {messages:0,coins:0,xp:0,level:1};
   }
+  // Valida el tipo de premio y usa parámetros SQL para los datos del usuario.
   async claim(id,kind,coins,xp,wait,now=Date.now()) {
     const col={work:'last_work',daily:'last_daily'}[kind];
     if (!['work','daily'].includes(kind) || ![coins,xp,wait,now].every(n=>Number.isSafeInteger(n)&&n>=0)) throw new TypeError('Premio inválido');
@@ -44,5 +48,6 @@ export default class Database {
     const row=await this.db.get('SELECT '+col+' AS last FROM users WHERE id=?',id);
     return {ok:false,remaining:Math.max(0,row.last+wait-now)};
   }
+  // Libera el archivo SQLite al detener el proceso.
   async close() { if(this.db) { await this.db.close(); this.db=null; } }
 }
