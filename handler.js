@@ -1,3 +1,4 @@
+import {audit} from './admin-audit.js';
 import {adminNames,handleAdmin} from './commands/admin.js';
 import { commands } from './commands/index.js';
 import { normalizeMessageContent } from '@whiskeysockets/baileys';
@@ -82,8 +83,10 @@ export function createCommandHandler(sock, db) {
         return result;
       };
       await cmd.run({ ...ctx, db, reply, replyWithImage, replyWithSticker, replyWithAudio, commands, sock, rawMessage: msg });
+      audit('comando completado: '+ctx.command);
       console.log('[COMANDO] Finalizado');
     } catch (error) {
+      audit('error de procesamiento');
       console.error('[ERROR]',stage,error?.name ?? 'Error',error?.code ?? error?.output?.statusCode ?? 'sin código');
       if (ctx.command) await reply('Ocurrió un error. Intenta más tarde.').catch(() => console.error('[RESPUESTA] No se pudo enviar el aviso de error'));
     }

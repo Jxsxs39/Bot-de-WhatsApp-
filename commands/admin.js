@@ -1,6 +1,8 @@
 import {readFile,writeFile,mkdir,rename} from 'node:fs/promises';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
+import {commands,reloadCommands} from './index.js';
+import {audit,readAudit} from '../admin-audit.js';
 import {randomBytes} from 'node:crypto';
 const run=promisify(execFile);
 const files=new Set(['general.js','economy.js','stickers.js']);
@@ -21,11 +23,14 @@ export async function ownerPriority(ctx){
   return (await owners()).includes(ctx.userId) ? 90 : 0;
 }
 export async function isAdmin(ctx){return (await ownerPriority(ctx))>=90;}
-export const adminNames=new Set(['getcode','setcode','savefile','test','update','restart','reload','logs','setowner','delowner']);
+export const adminNames=new Set(['getcode','setcode','savefile','test','update','restart','reload','logs','setowner','delowner','owners','admin']);
 export async function handleAdmin(ctx) {
   if(!await isAdmin(ctx)) return ctx.reply('Acceso administrativo denegado.');
   const [file,token]=ctx.args;
   const cmd=ctx.command;
+  audit('administración: '+cmd);
+  if(cmd==='admin') return ctx.reply([...adminNames].map(n=>'.'+n).join('\n'));
+  if(cmd==='owners') return ctx.reply('Principal: '+primary().split('@')[0]+' (100)\n'+(await owners()).map(x=>x.split('@')[0]+' (90)').join('\n'));
   if(cmd==='setowner' || cmd==='delowner'){
     if(ctx.userId!==primary()) return ctx.reply('Solo el propietario principal puede administrar owners.');
     const number=ctx.args.join('').replace(/^\+/,'').replace(/-/g,'');
@@ -41,14 +46,16 @@ export async function handleAdmin(ctx) {
     return ctx.reply(cmd==='setowner'?'Owner agregado.':'Owner eliminado.');
   }
   if(cmd==='getcode' || cmd==='setcode' || cmd==='savefile' || cmd==='test'){
-    if(!files.has(file)) return ctx.reply('Archivos permitidos: '+[...files].join(', '));
+    const aliases={hola:'general.js',menu:'general.js',historia:'general.js',dato:'general.js',perfil:'general.js',stats:'general.js',work:'economy.js',daily:'economy.js',sticker:'stickers.js'};
+    const target=aliases[file] || file;
+    if(!files.has(target)) return ctx.reply('Archivos permitidos: '+[...files].join(', '));
     if(cmd==='getcode'){
-      const source=await readFile('commands/'+file,'utf8');
-      for(let i=0;i<source.length;i+=3000) await ctx.reply('commands/'+file+'\n'+source.slice(i,i+3000));
+      const source=await readFile('commands/'+target,'utf8');
+      for(let i=0;i<source.length;i+=3000) await ctx.reply('commands/'+target+'\n'+source.slice(i,i+3000));
       return;
     }
     if(cmd==='test'){
-      try {await run(process.execPath,['--check','.admin-stage/'+file],{timeout:10000});return ctx.reply('Sintaxis válida. No se ejecutó ni publicó el código.');}
+      try {await run(process.execPath,['--check','.admin-stage/'+target],{timeout:10000});return ctx.reply('Sintaxis válida. No se ejecutó ni publicó el código.');}
       catch{return ctx.reply('La prueba de sintaxis falló o no existe el borrador.');}
     }
     // El código se toma de un mensaje citado y se guarda fuera de los módulos activos.
@@ -56,11 +63,11 @@ export async function handleAdmin(ctx) {
     const code=source?.conversation || source?.extendedTextMessage?.text;
     if(!code || Buffer.byteLength(code)>65536) return ctx.reply('Responde a un mensaje de código de hasta 64 KiB.');
     await mkdir('.admin-stage',{recursive:true,mode:0o700});
-    await writeFile('.admin-stage/'+file,code,{mode:0o600});
+    await writeFile('.admin-stage/'+target,code,{mode:0o600});
     return ctx.reply('Borrador guardado. Usa .test '+file+'. No se ha publicado.');
   }
-  if(cmd==='logs') return ctx.reply('Consulta los registros privados en Render. No se exponen credenciales por WhatsApp.');
-  if(cmd==='reload') return ctx.reply('Usa .restart para recargar el proceso completo.');
+  if(cmd==='logs') return ctx.reply(readAudit().join('\n') || 'Sin eventos registrados.');
+  if(cmd==='reload'){await reloadCommands();return ctx.reply('Comandos recargados: '+commands.size);}
   const key=ctx.userId+':'+cmd;
   const entry=pending.get(key);
   if(!entry || entry.token!==file || entry.until<Date.now()){
