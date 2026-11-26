@@ -106,7 +106,6 @@ test('long videos are trimmed to sticker length and produce WebP and audio outpu
   const directory = await mkdtemp(path.join(os.tmpdir(), 'sticker-test-'));
   const imagePath = path.join(directory, 'photo.png');
   const videoPath = path.join(directory, 'video.mp4');
-  const stickerPath = path.join(directory, 'sticker.webp');
   const audioPath = path.join(directory, 'audio.ogg');
   try {
     const image = spawnSync(ffmpeg, [
@@ -131,17 +130,22 @@ test('long videos are trimmed to sticker length and produce WebP and audio outpu
     assert.equal(videoSticker.sticker.toString('ascii', 8, 12), 'WEBP');
     assert.equal(videoSticker.audio.toString('ascii', 0, 4), 'OggS');
     assert.equal(videoSticker.duration, 5);
-    await writeFile(stickerPath, videoSticker.sticker);
     await writeFile(audioPath, videoSticker.audio);
-    const stickerFrames = spawnSync(ffprobe, [
-      '-v', 'error', '-count_frames', '-select_streams', 'v:0',
-      '-show_entries', 'stream=nb_read_frames', '-of', 'default=noprint_wrappers=1:nokey=1', stickerPath
-    ], { encoding: 'utf8' });
-    assert.equal(stickerFrames.status, 0, stickerFrames.stderr);
-    assert.ok(
-      Number(stickerFrames.stdout.trim()) <= 40,
-      `animated sticker had ${stickerFrames.stdout.trim()} frames; expected at most 40`
-    );
+    // FFprobe no decodifica WebP animado en todas las versiones. Lee los chunks ANMF del contenedor.
+    let frames = 0;
+    let durationMs = 0;
+    for (let offset = 12; offset + 8 <= videoSticker.sticker.length;) {
+      const size = videoSticker.sticker.readUInt32LE(offset + 4);
+      assert.ok(offset + 8 + size <= videoSticker.sticker.length);
+      if (videoSticker.sticker.toString('ascii', offset, offset + 4) === 'ANMF') {
+        assert.ok(size >= 16);
+        frames++;
+        durationMs += videoSticker.sticker.readUIntLE(offset + 20, 3);
+      }
+      offset += 8 + size + (size % 2);
+    }
+    assert.ok(frames > 0 && frames <= 40, `animated sticker had ${frames} frames; expected 1-40`);
+    assert.ok(durationMs <= 5000, `animated sticker lasted ${durationMs} ms; expected at most 5000 ms`);
     const audioDuration = spawnSync(ffprobe, [
       '-v', 'error', '-show_entries', 'format=duration',
       '-of', 'default=noprint_wrappers=1:nokey=1', audioPath
