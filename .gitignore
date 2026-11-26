@@ -8,3 +8,5 @@ data/
 *.db-*
 *.sqlite*
 *.log
+
+.admin-stage/
