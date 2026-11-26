@@ -41,7 +41,7 @@ export function parseMessage(msg, selfJids = []) {
   return { chatId, userId, ...(key.fromMe && !isGroup && chatId!==userId ? {selfChat:true}:{}), command: match?.[1].toLowerCase(), args: match?.[2]?.split(/\s+/) || [] };
 }
 // Inyectar socket y base permite probar sin conectarse a WhatsApp.
-export function createCommandHandler(sock, db) {
+export function createCommandHandler(sock, db, reloadSocket) {
   return { async handleMessage(msg) {
     const ctx = parseMessage(msg, [sock.user?.id, sock.user?.lid, sock.user?.phoneNumber]);
     // Diagnóstico sin mostrar números, contenido de mensajes ni credenciales.
@@ -71,7 +71,7 @@ export function createCommandHandler(sock, db) {
       // Cuenta mensajes normales también; solo los comandos reciben respuesta.
       await db.registerMessage(ctx.userId);
       if (!ctx.command) return;
-      if(adminNames.has(ctx.command)) { stage='autorización administrativa'; return await handleAdmin({...ctx,reply,rawMessage:msg}); }
+      if(adminNames.has(ctx.command)) { stage='autorización administrativa'; return await handleAdmin({...ctx,reply,rawMessage:msg,sock,reloadSocket}); }
       stage='búsqueda de comando';
       const cmd = commands.get(ctx.command);
       console.log('[COMANDO]', cmd ? ctx.command : 'desconocido');

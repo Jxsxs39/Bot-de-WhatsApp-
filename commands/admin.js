@@ -1,12 +1,10 @@
 import {readFile,writeFile,mkdir,rename} from 'node:fs/promises';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {commands,reloadCommands} from './index.js';
+
 import {audit,readAudit} from '../admin-audit.js';
-import {randomBytes} from 'node:crypto';
 const run=promisify(execFile);
 const files=new Set(['general.js','economy.js','stickers.js']);
-const pending=new Map();
 // El propietario principal fijo tiene prioridad 100 y no puede eliminarse por chat.
 const primary=()=> '584149164536@s.whatsapp.net';
 // Ambos identificadores pertenecen al mismo propietario principal.
@@ -31,11 +29,14 @@ export const adminNames=new Set(['getcode','setcode','savefile','test','update',
 // Una sola política controla el menú y la ejecución administrativa.
 const primaryOnly=new Set(['setowner','delowner']);
 export function visibleAdminNames(priority){return [...adminNames].filter(name=>priority>=90 && (priority>=100 || !primaryOnly.has(name)));}
-export function adminMenuLines(){return [...adminNames].map(n=>'• .'+n+' — '+(n==='admin'?'Todos':primaryOnly.has(n)?'Solo owner principal':'Solo owners'));}
+export function adminMenuLines(){return [...adminNames].map(n=>'• .'+n+' — '+(n==='admin'?'Todos':primaryOnly.has(n)?'Solo owner principal':n==='reload'?'Owners o dueño del socket':'Solo owners'));}
 export async function handleAdmin(ctx) {
   if(ctx.command==='admin') return ctx.reply('👑 *Administración*\n\n'+adminMenuLines().join('\n'));
   const priority=await ownerPriority(ctx);
-  if(priority<90) return ctx.reply('Acceso administrativo denegado.');
+  // El dueño del socket se verifica con la identidad de la sesión vinculada.
+  const socketIds=[ctx.sock?.user?.id,ctx.sock?.user?.lid,ctx.sock?.user?.phoneNumber].filter(x=>typeof x==='string').map(x=>x.replace(/:\d+@/,'@'));
+  const socketOwner=authenticatedSender(ctx) && socketIds.includes(ctx.userId);
+  if(priority<90 && !(ctx.command==='reload' && socketOwner)) return ctx.reply('Acceso administrativo denegado.');
   if(primaryOnly.has(ctx.command) && priority<100) return ctx.reply('Solo el propietario principal puede ejecutar este comando.');
   const [file,token]=ctx.args;
   const cmd=ctx.command;
@@ -43,12 +44,23 @@ export async function handleAdmin(ctx) {
   if(cmd==='owners') return ctx.reply('Principal: '+primary().split('@')[0]+' (100)\n'+(await owners()).map(x=>x.split('@')[0]+' (90)').join('\n'));
   if(cmd==='setowner' || cmd==='delowner'){
     if(!isPrimary(ctx.userId)) return ctx.reply('Solo el propietario principal puede administrar owners.');
+    // Usa las menciones reales de WhatsApp o el autor del mensaje citado.
+    const info=Object.values(ctx.rawMessage?.message || {}).find(x=>x?.contextInfo)?.contextInfo;
+    const mentions=info?.mentionedJid || [];
+    if(mentions.length>1) return ctx.reply('Menciona solo a un usuario.');
     const number=ctx.args.join('').replace(/^\+/,'').replace(/-/g,'');
-    if(!/^\d{8,15}$/.test(number)) return ctx.reply('Indica el número internacional.');
-    const jid=number+'@s.whatsapp.net';
-    if(jid===primary()) return ctx.reply('El propietario principal no se puede modificar.');
+    let jid=mentions[0] || (info?.quotedMessage && info.participant) || (/^\d{8,15}$/.test(number)?number+'@s.whatsapp.net':null);
+    jid=typeof jid==='string'?jid.replace(/:\d+@/,'@'):null;
+    if(!jid || !/^\d+@(s\.whatsapp\.net|lid)$/.test(jid)) return ctx.reply('Menciona a un usuario, responde a su mensaje o indica su número internacional.');
+    const ids=new Set([jid]);
+    try {
+      const map=ctx.sock?.signalRepository?.lidMapping;
+      const other=jid.endsWith('@lid')?await map?.getPNForLID(jid):await map?.getLIDForPN(jid);
+      if(typeof other==='string' && /^\d+@(s\.whatsapp\.net|lid)$/.test(other)) ids.add(other);
+    } catch {}
+    if([...ids].some(isPrimary)) return ctx.reply('El propietario principal no se puede modificar.');
     const list=new Set(await owners());
-    if(cmd==='setowner') list.add(jid); else list.delete(jid);
+    for(const id of ids) {if(cmd==='setowner') list.add(id); else list.delete(id);}
     const path=ownerFile();
     await mkdir((await import('node:path')).dirname(path),{recursive:true,mode:0o700});
     await writeFile(path+'.tmp',JSON.stringify([...list]),{mode:0o600});
@@ -88,23 +100,20 @@ export async function handleAdmin(ctx) {
     return ctx.reply('Archivo activo actualizado: '+path+'. Usa .reload para cargarlo. Respaldo disponible con .rollback '+target+'.');
   }
   if(cmd==='logs') return ctx.reply(readAudit().join('\n') || 'Sin eventos registrados.');
-  if(cmd==='reload'){await reloadCommands();return ctx.reply('Comandos recargados: '+commands.size);}
-  const key=(isPrimary(ctx.userId)?primary():ctx.userId)+':'+ctx.chatId+':'+cmd;
-  const entry=pending.get(key);
-  if(!entry || entry.token!==file || entry.until<Date.now()){
-    const value=randomBytes(4).toString('hex');
-    pending.set(key,{token:value,until:Date.now()+60000});
-    return ctx.reply('Confirma en 60 segundos: .'+cmd+' '+value);
+  if(cmd==='reload'){
+    if(typeof ctx.reloadSocket!=='function') return ctx.reply('La recarga del socket no está disponible.');
+    await ctx.reply('Recargando socket…');
+    ctx.reloadSocket();return;
   }
-  pending.delete(key);
   if(cmd==='update'){
     const hook=process.env.RENDER_DEPLOY_HOOK;
-    if(!hook) return ctx.reply('Configura RENDER_DEPLOY_HOOK en Render.');
+    if(!hook) return ctx.reply('El servicio de actualización no está configurado.');
     const url=new URL(hook);
     if(url.protocol!=='https:' || url.hostname!=='api.render.com' || !url.pathname.startsWith('/deploy/')) return ctx.reply('Hook no válido.');
+    await ctx.reply('Actualizando bot…');
     const result=await fetch(url,{method:'POST',redirect:'error',signal:AbortSignal.timeout(15000)});
-    return ctx.reply(result.ok?'Despliegue solicitado. Revisa Render.':'Render rechazó la solicitud.');
+    return ctx.reply(result.ok?'Actualización iniciada.':'No se pudo iniciar la actualización.');
   }
-  await ctx.reply('Reinicio solicitado. Render debe supervisar el proceso.');
+  await ctx.reply('Reiniciando bot…');
   setTimeout(()=>process.kill(process.pid,'SIGTERM'),500).unref();
 }
