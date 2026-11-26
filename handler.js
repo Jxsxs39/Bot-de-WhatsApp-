@@ -57,10 +57,11 @@ export function createCommandHandler(sock, db, reloadSocket, subbots) {
       return result;
     };
     const replyWithImage = async (url, caption) => {
-      const result = await sock.sendMessage(ctx.chatId, {
-        image: { url },
-        caption: styleBotReply(caption, ctx.command)
-      });
+      const message = { image: { url } };
+      if (typeof caption === 'string' && caption.length > 0) {
+        message.caption = styleBotReply(caption, ctx.command);
+      }
+      const result = await sock.sendMessage(ctx.chatId, message);
       console.log('[RESPUESTA] Imagen enviada al chat');
       return result;
     };
