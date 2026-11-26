@@ -12,11 +12,12 @@ export default [
   await reply('Tu identidad de WhatsApp\nNúmero JID: '+(pn||'No disponible')+'\nLID: '+(lid||'No disponible'));
  }},
  // Ping público: mide el tiempo real de envío de una respuesta a WhatsApp.
- {name:'ping', async run({reply}) {
+ ...['ping','p'].map(name=>({name,async run({reply}){
   const start=performance.now();
   await reply('🏓 ¡Pong! El bot está activo.');
-  await reply('Tiempo de envío: '+Math.round(performance.now()-start)+' ms');
- }},
+  const elapsed=performance.now()-start;
+  await reply('Tiempo real de envío: '+elapsed.toFixed(2)+' ms');
+ }})),
  {name:'tt', async run({reply,args}) {
   const link=args.join(' ').trim();
   if(!link) return reply('Uso: .tt <enlace de TikTok>. Para descargar, usa la opción oficial si el creador la permite.');
@@ -31,7 +32,7 @@ export default [
  // Menú dinámico: se actualiza al registrar otro comando.
  {name:'menu', async run(ctx) {
   const {replyWithImage,commands}=ctx;
-  const sections=[['General',['ping','menu','id','historia','dato','perfil','stats','chatgpt']],['Economía',['work','daily']],['Stickers',['sticker','s','stiker']]];
+  const sections=[['General',['ping','p','menu','id','historia','dato','perfil','stats','chatgpt']],['Economía',['work','daily']],['Stickers',['sticker','s','stiker']]];
   const known=new Set(sections.flatMap(([,names])=>names));
   sections.push(['Otros',[...commands.keys()].filter(n=>!known.has(n))]);
   const blocks=sections.map(([title,names])=>[title,names.filter(n=>commands.has(n))]);
