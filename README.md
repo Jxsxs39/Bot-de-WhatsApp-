@@ -6,8 +6,8 @@ Bot de WhatsApp inspirado en Attack on Titan. En desarrollo.
 Instala Git y Node.js 22 LTS. En Termux: `pkg install nodejs-lts git` (si no está disponible, usa nodejs compatible). Comprueba con `node -v` y `npm -v`.
 
 ```bash
-git clone -b test https://github.com/Jxsxs39/Bot-de-WhatsApp-.git historia-test
-cd historia-test
+git clone -b main https://github.com/Jxsxs39/Bot-de-WhatsApp-.git historia-bot
+cd historia-bot
 npm install
 npm test
 npm start

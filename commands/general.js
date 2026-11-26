@@ -1,3 +1,4 @@
+import {styleBotReply} from '../bot-style.js';
 // Cada objeto contiene el nombre del comando y la función que ejecuta.
 const historiaImageUrl = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQuJNQnSpOsMvWoDllNutNEUIvxnfcTcKNn2oCi76KyjQ&s=10';
 export default [
@@ -11,7 +12,14 @@ export default [
   if(lid && !/^\d+@lid$/.test(lid)) lid=undefined;
   await reply('Tu identidad de WhatsApp\nNúmero JID: '+(pn||'No disponible')+'\nLID: '+(lid||'No disponible'));
  }},
- {name:'ping', async run({reply}) { await reply('🏓 ¡Pong! El bot está activo.'); }},
+ // Ping público: mide el tiempo real de envío de una respuesta a WhatsApp.
+ ...['ping','p'].map(name=>({name,async run({reply,sock,chatId}){
+  const start=performance.now();
+  const sent=await reply('🏓 ¡Pong!\nEstado: Activo\nLatencia: midiendo…');
+  const elapsed=performance.now()-start;
+  if(!sent?.key) throw new Error('No se recibió la clave del mensaje');
+  await sock.sendMessage(chatId,{text:styleBotReply('🏓 ¡Pong!\nEstado: Activo\nLatencia: '+elapsed.toFixed(2)+' ms','ping'),edit:sent.key});
+ }})),
  {name:'tt', async run({reply,args}) {
   const link=args.join(' ').trim();
   if(!link) return reply('Uso: .tt <enlace de TikTok>. Para descargar, usa la opción oficial si el creador la permite.');
@@ -26,7 +34,7 @@ export default [
  // Menú dinámico: se actualiza al registrar otro comando.
  {name:'menu', async run(ctx) {
   const {replyWithImage,commands}=ctx;
-  const sections=[['General',['menu','id','historia','dato','perfil','stats','chatgpt']],['Economía',['work','daily']],['Stickers',['sticker','s','stiker']]];
+  const sections=[['General',['ping','p','menu','id','historia','dato','perfil','stats','chatgpt']],['Economía',['work','daily']],['Stickers',['sticker','s','stiker']]];
   const known=new Set(sections.flatMap(([,names])=>names));
   sections.push(['Otros',[...commands.keys()].filter(n=>!known.has(n))]);
   const blocks=sections.map(([title,names])=>[title,names.filter(n=>commands.has(n))]);
