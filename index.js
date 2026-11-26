@@ -1,4 +1,5 @@
 import makeWASocket, {useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion} from '@whiskeysockets/baileys';
+import {createServer} from 'node:http';
 import pino from 'pino';
 import {createInterface} from 'node:readline/promises';
 import Database from './database.js';
@@ -10,6 +11,15 @@ process.umask(0o077);
 const db=new Database();
 let socket, retry, pairingTimer, stopping=false, attempts=0, queue=Promise.resolve(), rl;
 // Render y otros servidores sin terminal pueden proporcionar el número por variable de entorno.
+// Render Web Service exige un puerto HTTP. No expone datos ni credenciales del bot.
+let healthServer;
+if (process.env.PORT) {
+  healthServer=createServer((req,res)=>{
+    res.writeHead(req.url==='/' || req.url==='/health' ? 200 : 404, {'Content-Type':'text/plain'});
+    res.end(req.url==='/' || req.url==='/health' ? 'Historia Reiss: proceso activo' : 'Not found');
+  });
+  healthServer.listen(Number(process.env.PORT),'0.0.0.0');
+}
 let phone=process.env.WHATSAPP_PHONE?.replace(/\D/g,'');
 // Crea el socket y recupera la sesión existente; no pide otro código si ya está registrada.
 async function connect() {
@@ -36,9 +46,9 @@ async function connect() {
   // Retira los listeners del socket anterior para evitar respuestas duplicadas.
   const cleanup=()=>{
     clearTimeout(pairingTimer);
-    sock.ev.removeListener('creds.update',onCreds);
-    sock.ev.removeListener('messages.upsert',onMessages);
-    sock.ev.removeListener('connection.update',onConnection);
+    sock.ev.off('creds.update',onCreds);
+    sock.ev.off('messages.upsert',onMessages);
+    sock.ev.off('connection.update',onConnection);
   };
   // Distingue desconexiones recuperables de una sesión revocada.
   const onConnection=({connection,lastDisconnect})=>{
@@ -71,7 +81,7 @@ function schedule(){
 // Cierre ordenado: cancela temporizadores, espera mensajes y cierra SQLite.
 async function shutdown(){
   if(stopping)return;stopping=true;clearTimeout(retry);clearTimeout(pairingTimer);rl?.close();
-  socket?.end(undefined);await queue;await db.close();
+  socket?.end(undefined);healthServer?.close();await queue;await db.close();
 }
 process.on('SIGINT',()=>void shutdown());
 process.on('SIGTERM',()=>void shutdown());

@@ -34,3 +34,6 @@ Desvincula inmediatamente la sesión que se publicó anteriormente desde WhatsAp
 
 ## Cómo agregar un comando
 Lee docs/APRENDER.md. Trabaja en test, ejecuta npm test y prueba en un grupo propio antes de integrar a main.
+
+## Despliegue en Render
+Configura WHATSAPP_PHONE con tu número internacional sin + en Environment. Usa Node 22, Build Command `npm install && npm rebuild sqlite3 --build-from-source` y Start Command `npm start`. El servidor HTTP se activa cuando Render proporciona PORT; solo indica que el proceso está activo, no que WhatsApp esté conectado. La sesión debe guardarse en almacenamiento persistente para sobrevivir a nuevos despliegues. No compartas códigos de vinculación.
