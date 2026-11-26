@@ -1,5 +1,6 @@
 // Cada objeto contiene el nombre del comando y la función que ejecuta.
 import {adminMenuLines} from './admin.js';
+const historiaImageUrl = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQuJNQnSpOsMvWoDllNutNEUIvxnfcTcKNn2oCi76KyjQ&s=10';
 export default [
  // Diagnóstico privado: muestra solo la identidad del remitente autenticado.
  {name:'id', async run({reply,chatId,userId,rawMessage,sock}) {
@@ -22,12 +23,19 @@ export default [
   }
   await reply('Para respetar los permisos del creador, no descargo el video automáticamente. Ábrelo en TikTok y usa Compartir → Guardar video si esa opción está habilitada.');
  }},
- // Saludo y orientación para usuarios nuevos.
- {name:'hola', async run({replyWithImage}) { await replyWithImage('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTz-Aiu59NlPmS7N0XXbyubXSZlEx6EgIypqmI70JMH47mc7YMxve845HJYp42YQYV2Mulslsp9GlBlf20SZZS10nqg3iqdJuVbONoMdeMCnA&s=10','¡Hola! Soy *Historia Reiss Bot* 👑\nEscribe .menu para ver mis comandos.'); }},
  // Menú dinámico: se actualiza al registrar otro comando.
- {name:'menu', async run(ctx) { const {reply,commands}=ctx; const sections=[['General',['hola','menu','id','historia','dato','perfil','stats']],['Economía',['work','daily']],['Stickers',['sticker','s','stiker']]]; const known=new Set(sections.flatMap(([,names])=>names)); sections.push(['Otros',[...commands.keys()].filter(n=>!known.has(n))]); const blocks=sections.map(([title,names])=>[title,names.filter(n=>commands.has(n))]); await reply('👑 *Menú principal*\n\n'+blocks.filter(([,names])=>names.length).map(([title,names])=>'*'+title+'*\n'+names.map(n=>'• .'+n).join('\n')).join('\n\n')+'\n\n*Administración*\n'+adminMenuLines().join('\n')); }},
+ {name:'menu', async run(ctx) {
+  const {replyWithImage,commands}=ctx;
+  const sections=[['General',['menu','id','historia','dato','perfil','stats']],['Economía',['work','daily']],['Stickers',['sticker','s','stiker']]];
+  const known=new Set(sections.flatMap(([,names])=>names));
+  sections.push(['Otros',[...commands.keys()].filter(n=>!known.has(n))]);
+  const blocks=sections.map(([title,names])=>[title,names.filter(n=>commands.has(n))]);
+  const banner='╭━━━･ﾟ✧ 👑 ✧ﾟ･━━━╮\n   *HISTORIA REISS*\n  _Tu guía por el reino_\n╰━━━━━━━━━━━━━━━━╯';
+  const menu=blocks.filter(([,names])=>names.length).map(([title,names])=>'*'+title+'*\n'+names.map(n=>'• .'+n).join('\n')).join('\n\n');
+  await replyWithImage(historiaImageUrl,banner+'\n\n📜 *Menú principal*\n\n'+menu+'\n\n*Administración*\n'+adminMenuLines().join('\n'));
+ }},
  // Texto narrativo editable sin tocar el motor del bot.
- {name:'historia', async run({replyWithImage}) { await replyWithImage('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQuJNQnSpOsMvWoDllNutNEUIvxnfcTcKNn2oCi76KyjQ&s=10','📖 *Historia Reiss*\n\nEn un pequeño pueblo oculto entre montañas, existía un reloj que no marcaba horas, sino recuerdos olvidados...'); }},
+ {name:'historia', async run({replyWithImage}) { await replyWithImage(historiaImageUrl,'📖 *Historia Reiss*\n\nEn un pequeño pueblo oculto entre montañas, existía un reloj que no marcaba horas, sino recuerdos olvidados...'); }},
  // Dato fijo; puede ampliarse a una colección posteriormente.
  {name:'dato', async run({reply}) { await reply('🏛️ *Dato curioso:* La Universidad de Oxford es más antigua que el Imperio Azteca.'); }},
  // Consulta únicamente el perfil de quien envía el mensaje.

@@ -26,13 +26,15 @@ Si sqlite3 necesita compilarse en Termux, instala python, make y clang. Si falla
 - .gitignore: evita publicar archivos privados o generados.
 
 ## Comandos
-.hola, .menu, .historia, .dato, .perfil, .stats, .work, .daily, .ping, .tt, .s1, .s2.
+.menu, .historia, .dato, .perfil, .stats, .work, .daily, .ping, .tt, .s1, .s2.
 Work tiene espera de 5 minutos y daily de 24 horas. Los juegos y la administración todavía no están implementados.
 También se aceptan comandos con prefijo `.` enviados desde la cuenta vinculada; sus mensajes propios sin prefijo se ignoran para evitar respuestas en bucle.
 
 `.ping` confirma que el bot está activo. `.tt <enlace>` valida enlaces de TikTok y recuerda usar la descarga oficial si el creador la habilitó; no descarga contenido automáticamente.
 
 `.s1` crea un sticker animado desde un video y envía el audio como mensaje aparte, porque WhatsApp no admite sonido dentro de los stickers. `.s2` crea un sticker sin audio desde una foto o video. Responde al medio con el comando o envíalo como caption; los videos se recortan a un máximo de 5 segundos y 16 MB. Si la conversión tarda demasiado o el sticker excede el tamaño permitido, el bot vuelve a intentarlo con clips de 3 y luego 1 segundo. FFmpeg y ffprobe deben estar disponibles en el hosting; el runtime nativo de Render los incluye.
+
+El comando `.menu` muestra un banner de Historia Reiss junto con la lista de comandos. Las respuestas usan un marco visual con emojis y su tono cálido y regio. Los comandos `.getcode` y `.logs` conservan su salida sin adornos para que el código y los registros sigan siendo legibles; `.s1` produce la animación real del sticker desde el video.
 
 ## Seguridad
 Desvincula inmediatamente la sesión que se publicó anteriormente desde WhatsApp. Crea una nueva. Borrar archivos de una rama no borra el historial Git ni las copias existentes. No reutilices las credenciales publicadas. No subas node_modules, sesiones, bases de datos ni .env. Antes de actualizar, respalda tus datos localmente y no uses la misma sesión en dos procesos. Las estadísticas antiguas guardadas por grupo no se pueden repartir automáticamente entre participantes.

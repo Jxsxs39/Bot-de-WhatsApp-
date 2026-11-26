@@ -52,7 +52,7 @@ export async function handleAdmin(ctx) {
     return ctx.reply(cmd==='setowner'?'Owner agregado.':'Owner eliminado.');
   }
   if(cmd==='getcode' || cmd==='setcode' || cmd==='savefile' || cmd==='test' || cmd==='rollback'){
-    const aliases={hola:'general.js',menu:'general.js',historia:'general.js',dato:'general.js',perfil:'general.js',stats:'general.js',work:'economy.js',daily:'economy.js',sticker:'stickers.js'};
+    const aliases={menu:'general.js',historia:'general.js',dato:'general.js',perfil:'general.js',stats:'general.js',work:'economy.js',daily:'economy.js',sticker:'stickers.js'};
     const target=aliases[file] || file;
     if(!files.has(target)) return ctx.reply('Archivos permitidos: '+[...files].join(', '));
     if(cmd==='getcode'){
