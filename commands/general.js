@@ -1,6 +1,18 @@
 // Cada objeto contiene el nombre del comando y la función que ejecuta.
 import {ownerPriority,visibleAdminNames} from './admin.js';
 export default [
+ {name:'ping', async run({reply}) { await reply('🏓 ¡Pong! El bot está activo.'); }},
+ {name:'tt', async run({reply,args}) {
+  const link=args.join(' ').trim();
+  if(!link) return reply('Uso: .tt <enlace de TikTok>. Para descargar, usa la opción oficial si el creador la permite.');
+  let url;
+  try { url=new URL(link); } catch { return reply('El enlace no parece válido. Usa un enlace https://www.tiktok.com/...'); }
+  const allowedHosts=new Set(['tiktok.com','www.tiktok.com','m.tiktok.com','vm.tiktok.com','vt.tiktok.com']);
+  if(url.protocol!=='https:' || !allowedHosts.has(url.hostname.toLowerCase())) {
+   return reply('Ese no parece ser un enlace válido de TikTok. Usa un enlace https://www.tiktok.com/...');
+  }
+  await reply('Para respetar los permisos del creador, no descargo el video automáticamente. Ábrelo en TikTok y usa Compartir → Guardar video si esa opción está habilitada.');
+ }},
  // Saludo y orientación para usuarios nuevos.
  {name:'hola', async run({replyWithImage}) { await replyWithImage('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTz-Aiu59NlPmS7N0XXbyubXSZlEx6EgIypqmI70JMH47mc7YMxve845HJYp42YQYV2Mulslsp9GlBlf20SZZS10nqg3iqdJuVbONoMdeMCnA&s=10','¡Hola! Soy *Historia Reiss Bot* 👑\nEscribe .menu para ver mis comandos.'); }},
  // Menú dinámico: se actualiza al registrar otro comando.

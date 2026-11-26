@@ -9,6 +9,7 @@ const MAX_MEDIA_BYTES = 16 * 1024 * 1024;
 const MAX_STATIC_STICKER_BYTES = 100 * 1024;
 const MAX_ANIMATED_STICKER_BYTES = 500 * 1024;
 const MAX_VIDEO_SECONDS = 5;
+const VIDEO_DURATION_FALLBACKS = [MAX_VIDEO_SECONDS, 3, 1];
 const mediaLogger = pino({ level: 'silent' });
 
 export class StickerMediaError extends Error {
@@ -125,14 +126,13 @@ function run(program, args) {
       finish(reject, new StickerMediaError(
         'PROCESS_TIMEOUT',
         `${program} exceeded the processing time limit`,
-        'La conversión tardó demasiado. Prueba con un archivo más corto.'
+        'La conversión tardó demasiado incluso al recortar el video automáticamente. Prueba con uno de menor resolución.'
       ));
     }, 30_000);
     timer.unref?.();
   });
 }
 
-// FIX: detectar extensión real por magic bytes
 function detectExt(buffer, type) {
   if (buffer[0] === 0xFF && buffer[1] === 0xD8) return '.jpg';
   if (buffer[0] === 0x89 && buffer[1] === 0x50) return '.png';
@@ -141,7 +141,7 @@ function detectExt(buffer, type) {
   return type === 'video' ? '.mp4' : '.jpg';
 }
 
-export async function createStickerMedia(buffer, type, includeAudio = false) {
+export async function createStickerMedia(buffer, type, includeAudio = false, processRunner = run) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'whatsapp-sticker-'));
   const ext = detectExt(buffer, type);
   const inputPath = path.join(directory, `input${ext}`);
@@ -152,58 +152,74 @@ export async function createStickerMedia(buffer, type, includeAudio = false) {
     await writeFile(inputPath, buffer);
     let hasAudio = false;
     if (type === 'video' && includeAudio) {
-      // FIX: si no hay audio, ffprobe no debe tumbar el sticker
-      try {
-        const probe = await run(process.env.FFPROBE_PATH || 'ffprobe', [
-          '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_type',
-          '-of', 'csv=p=0', inputPath
-        ]);
-        hasAudio = Boolean(probe.stdout.trim());
-      } catch {
-        hasAudio = false;
-      }
+      const probe = await processRunner(process.env.FFPROBE_PATH || 'ffprobe', [
+        '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_type',
+        '-of', 'csv=p=0', inputPath
+      ]);
+      hasAudio = Boolean(probe.stdout.trim());
     }
 
-    // FIX: pad con black@0 y pix_fmt correcto
     const scale = 'scale=512:512:force_original_aspect_ratio=decrease:flags=lanczos,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0,format=yuva420p';
     const stickerLimit = type === 'video' ? MAX_ANIMATED_STICKER_BYTES : MAX_STATIC_STICKER_BYTES;
     const qualities = type === 'video' ? ['40', '25', '15'] : ['55', '40', '25'];
     let stickerSize = Infinity;
-    for (const quality of qualities) {
-      const videoFilter = type === 'video' ? `fps=8,${scale}` : scale;
-      const args = [
-        '-hide_banner', '-loglevel', 'error', '-y', '-i', inputPath,
-        ...(type === 'video' ? ['-t', String(MAX_VIDEO_SECONDS)] : ['-frames:v', '1']),
-        '-vf', videoFilter, '-an',
-        '-c:v', type === 'video' ? 'libwebp_anim' : 'libwebp',
-        '-pix_fmt', 'yuva420p',
-        '-quality', quality,
-        '-compression_level', '6',
-        ...(type === 'video' ? ['-loop', '0', '-lossless', '0'] : ['-lossless', '0']),
-        '-f', 'webp', stickerPath
-      ];
-      await run(ffmpeg, args);
-      stickerSize = (await stat(stickerPath)).size;
+    let videoDuration = null;
+    const durations = type === 'video' ? VIDEO_DURATION_FALLBACKS : [null];
+    for (const [durationIndex, duration] of durations.entries()) {
+      videoDuration = duration;
+      let retryShorter = false;
+      for (const quality of qualities) {
+        const videoFilter = type === 'video' ? `fps=8,${scale}` : scale;
+        const args = [
+          '-hide_banner', '-loglevel', 'error', '-y',
+          ...(duration ? ['-t', String(duration)] : []),
+          '-i', inputPath,
+          ...(duration ? ['-t', String(duration)] : []),
+          ...(type === 'video' ? [] : ['-frames:v', '1']),
+          '-vf', videoFilter, '-an',
+          '-c:v', type === 'video' ? 'libwebp_anim' : 'libwebp',
+          '-pix_fmt', 'yuva420p',
+          '-quality', quality,
+          '-compression_level', '4',
+          ...(type === 'video' ? ['-loop', '0', '-lossless', '0'] : ['-lossless', '0']),
+          '-f', 'webp', stickerPath
+        ];
+        try {
+          await processRunner(ffmpeg, args);
+        } catch (error) {
+          if (type === 'video' && error.code === 'PROCESS_TIMEOUT' && durationIndex < durations.length - 1) {
+            retryShorter = true;
+            break;
+          }
+          throw error;
+        }
+        stickerSize = (await stat(stickerPath)).size;
+        if (stickerSize <= stickerLimit) break;
+      }
       if (stickerSize <= stickerLimit) break;
+      if (retryShorter) continue;
     }
     if (stickerSize > stickerLimit) {
       throw new StickerMediaError(
         'STICKER_TOO_LARGE',
         'Converted sticker exceeded WhatsApp size limits',
-        'El sticker quedó muy pesado. Usa una imagen más simple o un video de menos de 5 segundos.'
+        type === 'video'
+          ? 'El sticker seguía siendo muy pesado tras recortar el video. Prueba con uno de menor resolución.'
+          : 'El sticker quedó muy pesado. Usa una imagen más simple.'
       );
     }
 
     let audio = null;
     if (hasAudio) {
-      await run(ffmpeg, [
-        '-hide_banner', '-loglevel', 'error', '-y', '-i', inputPath,
-        '-map', '0:a:0', '-vn', '-t', String(MAX_VIDEO_SECONDS),
+      await processRunner(ffmpeg, [
+        '-hide_banner', '-loglevel', 'error', '-y',
+        '-t', String(videoDuration), '-i', inputPath,
+        '-t', String(videoDuration), '-map', '0:a:0', '-vn',
         '-c:a', 'libopus', '-b:a', '64k', '-ac', '1', '-ar', '48000', '-f', 'ogg', audioPath
       ]);
       audio = await readFile(audioPath);
     }
-    return { sticker: await readFile(stickerPath), audio };
+    return { sticker: await readFile(stickerPath), audio, duration: videoDuration };
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

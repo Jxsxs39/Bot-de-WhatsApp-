@@ -46,6 +46,24 @@ test('comandos propios de la cuenta vinculada sí reciben respuesta',async()=>{
   assert.equal((await db.getStats('456@s.whatsapp.net')).messages,1);
  }finally{await db.close();}
 });
+test('.ping confirma actividad y .tt guía a la descarga oficial',async()=>{
+ const db=await new Database(':memory:').init();
+ try {
+  const sent=[];
+  const handler=createCommandHandler({sendMessage:async(...args)=>sent.push(args)},db);
+  await handler.handleMessage({
+   key:{remoteJid:'123@s.whatsapp.net'},
+   message:{conversation:'.ping'}
+  });
+  await handler.handleMessage({
+   key:{remoteJid:'123@s.whatsapp.net'},
+   message:{conversation:'.tt https://www.tiktok.com/@creator/video/123'}
+  });
+  assert.equal(sent.length,2);
+  assert.match(sent[0][1].text,/Pong/);
+  assert.match(sent[1][1].text,/no descargo el video automáticamente/);
+ }finally{await db.close();}
+});
 test('saludo e historia responden con imágenes y el menú usa prefijo punto',async()=>{
  const db=await new Database(':memory:').init();
  try {
@@ -60,5 +78,7 @@ test('saludo e historia responden con imágenes y el menú usa prefijo punto',as
   assert.match(sent[2][1].text,/• \.hola/);
   assert.match(sent[2][1].text,/• \.s1/);
   assert.match(sent[2][1].text,/• \.s2/);
+  assert.match(sent[2][1].text,/• \.ping/);
+  assert.match(sent[2][1].text,/• \.tt/);
  }finally{await db.close();}
 });

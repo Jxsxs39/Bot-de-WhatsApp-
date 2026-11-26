@@ -26,7 +26,7 @@ async function createSticker(ctx, includeAudio) {
     }
   } catch (error) {
     if (!(error instanceof StickerMediaError)) throw error;
-    console.error('[STICKER]', error.code);
+    console.error('[STICKER]', error.code, error.message, error.details || '');
     await ctx.reply(error.userMessage);
   }
 }
