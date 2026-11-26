@@ -23,7 +23,7 @@ export async function ownerPriority(ctx){
   return (await owners()).includes(ctx.userId) ? 90 : 0;
 }
 export async function isAdmin(ctx){return (await ownerPriority(ctx))>=90;}
-export const adminNames=new Set(['getcode','setcode','savefile','test','update','restart','reload','logs','setowner','delowner','owners','admin']);
+export const adminNames=new Set(['getcode','setcode','savefile','test','update','restart','reload','logs','setowner','delowner','owners','admin','rollback']);
 export async function handleAdmin(ctx) {
   if(!await isAdmin(ctx)) return ctx.reply('Acceso administrativo denegado.');
   const [file,token]=ctx.args;
@@ -45,7 +45,7 @@ export async function handleAdmin(ctx) {
     await rename(path+'.tmp',path);
     return ctx.reply(cmd==='setowner'?'Owner agregado.':'Owner eliminado.');
   }
-  if(cmd==='getcode' || cmd==='setcode' || cmd==='savefile' || cmd==='test'){
+  if(cmd==='getcode' || cmd==='setcode' || cmd==='savefile' || cmd==='test' || cmd==='rollback'){
     const aliases={hola:'general.js',menu:'general.js',historia:'general.js',dato:'general.js',perfil:'general.js',stats:'general.js',work:'economy.js',daily:'economy.js',sticker:'stickers.js'};
     const target=aliases[file] || file;
     if(!files.has(target)) return ctx.reply('Archivos permitidos: '+[...files].join(', '));
@@ -54,17 +54,31 @@ export async function handleAdmin(ctx) {
       for(let i=0;i<source.length;i+=3000) await ctx.reply('commands/'+target+'\n'+source.slice(i,i+3000));
       return;
     }
-    if(cmd==='test'){
-      try {await run(process.execPath,['--check','.admin-stage/'+target],{timeout:10000});return ctx.reply('Sintaxis válida. No se ejecutó ni publicó el código.');}
-      catch{return ctx.reply('La prueba de sintaxis falló o no existe el borrador.');}
+    if(cmd==='rollback'){
+      if(ctx.userId!==primary()) return ctx.reply('Solo el owner principal puede restaurar código.');
+      const previous=await readFile('.admin-stage/'+target+'.backup','utf8');
+      await writeFile('commands/'+target+'.tmp',previous,{mode:0o600});
+      await rename('commands/'+target+'.tmp','commands/'+target);
+      return ctx.reply('Archivo restaurado. Reinicia o recarga para aplicarlo.');
     }
-    // El código se toma de un mensaje citado y se guarda fuera de los módulos activos.
+    // El código citado se valida antes de reemplazar el archivo activo.
     const source=ctx.rawMessage?.message?.extendedTextMessage?.contextInfo?.quotedMessage;
     const code=source?.conversation || source?.extendedTextMessage?.text;
     if(!code || Buffer.byteLength(code)>65536) return ctx.reply('Responde a un mensaje de código de hasta 64 KiB.');
     await mkdir('.admin-stage',{recursive:true,mode:0o700});
-    await writeFile('.admin-stage/'+target,code,{mode:0o600});
-    return ctx.reply('Borrador guardado. Usa .test '+file+'. No se ha publicado.');
+    if(cmd!=='test' && ctx.userId!==primary()) return ctx.reply('Solo el owner principal puede modificar código activo.');
+    const candidate='.admin-stage/'+target;
+    await writeFile(candidate,code,{mode:0o600});
+    try {await run(process.execPath,['--check',candidate],{timeout:10000});}
+    catch{return ctx.reply('Sintaxis inválida. El archivo activo no cambió.');}
+    if(cmd==='test') return ctx.reply('Sintaxis válida. No se ejecutó el código.');
+    // Solo el propietario principal puede instalar código ejecutable.
+    if(ctx.userId!==primary()) return ctx.reply('Solo el owner principal puede modificar código activo.');
+    const path='commands/'+target;
+    await writeFile(candidate+'.backup',await readFile(path),{mode:0o600});
+    await writeFile(path+'.tmp',code,{mode:0o600});
+    await rename(path+'.tmp',path);
+    return ctx.reply('Archivo activo actualizado: '+path+'. Usa .reload para cargarlo. Respaldo disponible con .rollback '+target+'.');
   }
   if(cmd==='logs') return ctx.reply(readAudit().join('\n') || 'Sin eventos registrados.');
   if(cmd==='reload'){await reloadCommands();return ctx.reply('Comandos recargados: '+commands.size);}
