@@ -1,5 +1,4 @@
 // Cada objeto contiene el nombre del comando y la función que ejecuta.
-import {adminMenuLines} from './admin.js';
 const historiaImageUrl = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQuJNQnSpOsMvWoDllNutNEUIvxnfcTcKNn2oCi76KyjQ&s=10';
 export default [
  // Diagnóstico en grupos y privados: muestra solo la identidad del remitente autenticado.
@@ -27,13 +26,13 @@ export default [
  // Menú dinámico: se actualiza al registrar otro comando.
  {name:'menu', async run(ctx) {
   const {replyWithImage,commands}=ctx;
-  const sections=[['General',['menu','id','historia','dato','perfil','stats']],['Economía',['work','daily']],['Stickers',['sticker','s','stiker']]];
+  const sections=[['General',['menu','id','historia','dato','perfil','stats','chatgpt']],['Economía',['work','daily']],['Stickers',['sticker','s','stiker']]];
   const known=new Set(sections.flatMap(([,names])=>names));
   sections.push(['Otros',[...commands.keys()].filter(n=>!known.has(n))]);
   const blocks=sections.map(([title,names])=>[title,names.filter(n=>commands.has(n))]);
   const banner='╭━━━･ﾟ✧ 👑 ✧ﾟ･━━━╮\n   *HISTORIA REISS*\n  _Tu guía por el reino_\n╰━━━━━━━━━━━━━━━━╯';
   const menu=blocks.filter(([,names])=>names.length).map(([title,names])=>'*'+title+'*\n'+names.map(n=>'• .'+n).join('\n')).join('\n\n');
-  await replyWithImage(historiaImageUrl,banner+'\n\n📜 *Menú principal*\n\n'+menu+'\n\n*Administración*\n'+adminMenuLines().join('\n'));
+  await replyWithImage(historiaImageUrl,banner+'\n\n📜 *Menú principal*\n\n'+menu);
  }},
  // Texto narrativo editable sin tocar el motor del bot.
  {name:'historia', async run({replyWithImage}) { await replyWithImage(historiaImageUrl,'📖 *Historia Reiss*\n\nEn un pequeño pueblo oculto entre montañas, existía un reloj que no marcaba horas, sino recuerdos olvidados...'); }},
