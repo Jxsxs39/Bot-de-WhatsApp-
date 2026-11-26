@@ -9,17 +9,19 @@ import {createCommandHandler} from './handler.js';
 process.umask(0o077);
 const db=new Database();
 let socket, retry, pairingTimer, stopping=false, attempts=0, queue=Promise.resolve(), rl;
-let phone;
+// Render y otros servidores sin terminal pueden proporcionar el número por variable de entorno.
+let phone=process.env.WHATSAPP_PHONE?.replace(/\D/g,'');
 // Crea el socket y recupera la sesión existente; no pide otro código si ya está registrada.
 async function connect() {
   if(stopping) return;
   const {state,saveCreds}=await useMultiFileAuthState('sesion_historia');
   if(!state.creds.registered && !phone) {
+    if (!process.stdin.isTTY) throw new Error('Configura WHATSAPP_PHONE en las variables de entorno del servidor');
     rl=createInterface({input:process.stdin,output:process.stdout});
     try { phone=(await rl.question('Número internacional sin +: ')).replace(/\D/g,''); }
     finally { rl.close(); rl=null; }
-    if(!/^\d{8,15}$/.test(phone)) throw new Error('Número inválido');
   }
+  if(!state.creds.registered && !/^\d{8,15}$/.test(phone || '')) throw new Error('Número internacional inválido');
   const {version}=await fetchLatestBaileysVersion();
   if(stopping) return;
   const sock=makeWASocket({version,auth:state,logger:pino({level:'silent'}),browser:['Ubuntu','Chrome','22.04']});
