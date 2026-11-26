@@ -138,7 +138,10 @@ test('long videos are trimmed to sticker length and produce WebP and audio outpu
       '-show_entries', 'stream=nb_read_frames', '-of', 'default=noprint_wrappers=1:nokey=1', stickerPath
     ], { encoding: 'utf8' });
     assert.equal(stickerFrames.status, 0, stickerFrames.stderr);
-    assert.ok(Number(stickerFrames.stdout.trim()) <= 40, 'animated sticker exceeded 5 seconds at 8 fps');
+    assert.ok(
+      Number(stickerFrames.stdout.trim()) <= 40,
+      `animated sticker had ${stickerFrames.stdout.trim()} frames; expected at most 40`
+    );
     const audioDuration = spawnSync(ffprobe, [
       '-v', 'error', '-show_entries', 'format=duration',
       '-of', 'default=noprint_wrappers=1:nokey=1', audioPath

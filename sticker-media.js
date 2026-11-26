@@ -169,7 +169,9 @@ export async function createStickerMedia(buffer, type, includeAudio = false, pro
       videoDuration = duration;
       let retryShorter = false;
       for (const quality of qualities) {
-        const videoFilter = type === 'video' ? `fps=8,${scale}` : scale;
+        const videoFilter = type === 'video'
+          ? `fps=8,trim=end_frame=${duration * 8},setpts=PTS-STARTPTS,${scale}`
+          : scale;
         const args = [
           '-hide_banner', '-loglevel', 'error', '-y',
           ...(duration ? ['-t', String(duration)] : []),
