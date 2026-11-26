@@ -6,6 +6,7 @@ import Database from './database.js';
 import {createCommandHandler} from './handler.js';
 import {MessageDeduplicator} from './message-deduplicator.js';
 import {SubbotManager} from './subbot-manager.js';
+import {clearWhatsAppAuthState} from './whatsapp-session.js';
 
 // Una base de datos para toda la vida del proceso, no una por reconexión.
 // Permisos privados para los archivos nuevos de sesión y base de datos.
@@ -21,7 +22,8 @@ let phone=process.env.WHATSAPP_PHONE?.replace(/\D/g,'');
 // Crea el socket y recupera la sesión existente; no pide otro código si ya está registrada.
 async function connect() {
   if(stopping) return;
-  const {state,saveCreds}=await useMultiFileAuthState(process.env.WHATSAPP_SESSION_DIR || 'sesion_historia');
+  const authDirectory=process.env.WHATSAPP_SESSION_DIR || 'sesion_historia';
+  const {state,saveCreds}=await useMultiFileAuthState(authDirectory);
   if(!state.creds.registered && !phone) {
     if (!process.stdin.isTTY) throw new Error('Configura WHATSAPP_PHONE en las variables de entorno del servidor');
     rl=createInterface({input:process.stdin,output:process.stdout});
@@ -73,8 +75,19 @@ async function connect() {
       cleanup();socket=null;
       const code=lastDisconnect?.error?.output?.statusCode;
       console.log('Conexión cerrada; estado:',code ?? 'desconocido');
-      if(code===DisconnectReason.loggedOut || code===DisconnectReason.connectionReplaced){
-        console.error('Sesión cerrada o reemplazada. Revisa dispositivos vinculados.');void shutdown();return;
+      if(code===DisconnectReason.loggedOut) {
+        console.log('Sesión desvinculada. Limpiando credenciales para solicitar una nueva vinculación.');
+        void queue.then(()=>clearWhatsAppAuthState(authDirectory)).then(()=>{
+          if(!stopping) schedule();
+        }).catch(error=>{
+          console.error('No se pudo limpiar la sesión de WhatsApp:',error?.message||error?.name||'Error');
+          void shutdown();
+        });
+        return;
+      }
+      if(code===DisconnectReason.connectionReplaced) {
+        console.error('La sesión fue reemplazada por otra conexión. Deteniendo este proceso para evitar conflictos.');
+        void shutdown();return;
       }
       schedule();
     }
