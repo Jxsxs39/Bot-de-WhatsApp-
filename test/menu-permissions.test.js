@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {visibleAdminNames,adminNames} from '../commands/admin.js';
+import {handleAdmin,visibleAdminNames,adminNames} from '../commands/admin.js';
 import {commands} from '../commands/index.js';
 test('menús según permisos',async()=>{
  assert.deepEqual(visibleAdminNames(0),[]);
@@ -13,8 +13,10 @@ test('menús según permisos',async()=>{
  const id='584149164536@s.whatsapp.net';
  const ctx={commands,userId:id,chatId:id,replyWithImage:async(_url,caption)=>{output=caption;}};
  await commands.get('menu').run(ctx);
- assert.match(output,/\.setcode/);
- await commands.get('menu').run({...ctx,chatId:'123@g.us'});
- assert.match(output,/\.setcode — Solo owners/);
- assert.match(output,/\.setowner — Solo owner principal/);
+ assert.match(output,/\.chatgpt/);
+ assert.doesNotMatch(output,/\.setcode|\.setowner|\.restart/);
+ let adminOutput;
+ await handleAdmin({command:'admin',reply:async text=>{adminOutput=text;}});
+ assert.match(adminOutput,/\.setcode/);
+ assert.match(adminOutput,/\.setowner — Solo owner principal/);
 });

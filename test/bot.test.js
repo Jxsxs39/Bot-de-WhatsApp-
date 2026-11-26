@@ -91,6 +91,7 @@ test('.menu muestra el banner y .hola ya no está disponible',async()=>{
   assert.match(sent[1][1].caption,/• \.s2/);
   assert.match(sent[1][1].caption,/• \.ping/);
   assert.match(sent[1][1].caption,/• \.tt/);
+  assert.match(sent[1][1].caption,/• \.chatgpt/);
   assert.doesNotMatch(sent[1][1].caption,/\.hola/);
   assert.match(sent[2][1].text,/Comando no encontrado/);
   assert.equal(sent[2][1].image,undefined);
