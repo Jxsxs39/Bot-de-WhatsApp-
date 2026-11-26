@@ -25,3 +25,24 @@ jobs:
       - run: npm audit --audit-level=high
       - run: npm test
       - run: node --check index.js
+      - name: Comprobar API real de eventos de Baileys
+        run: |
+          node --input-type=module <<'JS'
+          import { makeEventBuffer } from '@whiskeysockets/baileys';
+          import pino from 'pino';
+          import assert from 'node:assert/strict';
+          const ev = makeEventBuffer(pino({level:'silent'}));
+          let calls = 0;
+          const listener = () => calls++;
+          ev.on('connection.update', listener);
+          ev.emit('connection.update', {connection:'close'});
+          ev.off('connection.update', listener);
+          ev.emit('connection.update', {connection:'close'});
+          assert.equal(calls, 1);
+          JS
+      - name: Comprobar puerto HTTP sin sesión real
+        run: |
+          PORT=18765 WHATSAPP_PHONE=12345678901 npm start > /tmp/historia.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          curl --retry 15 --retry-connrefused --retry-delay 1 --fail http://127.0.0.1:18765/health
