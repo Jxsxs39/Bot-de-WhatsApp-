@@ -1,6 +1,15 @@
 // Cada objeto contiene el nombre del comando y la función que ejecuta.
 import {adminMenuLines} from './admin.js';
 export default [
+ // Diagnóstico privado: muestra solo la identidad del remitente autenticado.
+ {name:'id', async run({reply,chatId,userId,rawMessage,sock}) {
+  if(chatId.endsWith('@g.us')) return reply('Usa .id en un chat privado.');
+  const ids=[userId,rawMessage?.key?.remoteJidAlt,chatId].filter(x=>typeof x==='string').map(x=>x.replace(/:\d+@/,'@'));
+  const pn=ids.find(x=>/^\d+@s\.whatsapp\.net$/.test(x));
+  let lid=ids.find(x=>/^\d+@lid$/.test(x));
+  if(!lid && pn) try {lid=await sock?.signalRepository?.lidMapping?.getLIDForPN(pn);} catch {}
+  await reply('Tu identidad de WhatsApp\nNúmero JID: '+(pn||'No disponible')+'\nLID: '+(lid||'No disponible'));
+ }},
  {name:'ping', async run({reply}) { await reply('🏓 ¡Pong! El bot está activo.'); }},
  {name:'tt', async run({reply,args}) {
   const link=args.join(' ').trim();
@@ -16,7 +25,7 @@ export default [
  // Saludo y orientación para usuarios nuevos.
  {name:'hola', async run({replyWithImage}) { await replyWithImage('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTz-Aiu59NlPmS7N0XXbyubXSZlEx6EgIypqmI70JMH47mc7YMxve845HJYp42YQYV2Mulslsp9GlBlf20SZZS10nqg3iqdJuVbONoMdeMCnA&s=10','¡Hola! Soy *Historia Reiss Bot* 👑\nEscribe .menu para ver mis comandos.'); }},
  // Menú dinámico: se actualiza al registrar otro comando.
- {name:'menu', async run(ctx) { const {reply,commands}=ctx; const sections=[['General',['hola','menu','historia','dato','perfil','stats']],['Economía',['work','daily']],['Stickers',['sticker','s','stiker']]]; const known=new Set(sections.flatMap(([,names])=>names)); sections.push(['Otros',[...commands.keys()].filter(n=>!known.has(n))]); const blocks=sections.map(([title,names])=>[title,names.filter(n=>commands.has(n))]); await reply('👑 *Menú principal*\n\n'+blocks.filter(([,names])=>names.length).map(([title,names])=>'*'+title+'*\n'+names.map(n=>'• .'+n).join('\n')).join('\n\n')+'\n\n*Administración*\n'+adminMenuLines().join('\n')); }},
+ {name:'menu', async run(ctx) { const {reply,commands}=ctx; const sections=[['General',['hola','menu','id','historia','dato','perfil','stats']],['Economía',['work','daily']],['Stickers',['sticker','s','stiker']]]; const known=new Set(sections.flatMap(([,names])=>names)); sections.push(['Otros',[...commands.keys()].filter(n=>!known.has(n))]); const blocks=sections.map(([title,names])=>[title,names.filter(n=>commands.has(n))]); await reply('👑 *Menú principal*\n\n'+blocks.filter(([,names])=>names.length).map(([title,names])=>'*'+title+'*\n'+names.map(n=>'• .'+n).join('\n')).join('\n\n')+'\n\n*Administración*\n'+adminMenuLines().join('\n')); }},
  // Texto narrativo editable sin tocar el motor del bot.
  {name:'historia', async run({replyWithImage}) { await replyWithImage('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQuJNQnSpOsMvWoDllNutNEUIvxnfcTcKNn2oCi76KyjQ&s=10','📖 *Historia Reiss*\n\nEn un pequeño pueblo oculto entre montañas, existía un reloj que no marcaba horas, sino recuerdos olvidados...'); }},
  // Dato fijo; puede ampliarse a una colección posteriormente.
