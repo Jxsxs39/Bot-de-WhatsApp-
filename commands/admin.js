@@ -9,6 +9,9 @@ const files=new Set(['general.js','economy.js','stickers.js']);
 const pending=new Map();
 // El propietario principal fijo tiene prioridad 100 y no puede eliminarse por chat.
 const primary=()=> '584149164536@s.whatsapp.net';
+// Ambos identificadores pertenecen al mismo propietario principal.
+const primaryLid='10707890389140@lid';
+const isPrimary=id=>id===primary() || id===primaryLid;
 const ownerFile=()=>process.env.BOT_OWNERS_FILE || 'data/owners.json';
 async function owners(){
   try {const list=JSON.parse(await readFile(ownerFile(),'utf8'));if(!Array.isArray(list)) throw new Error('Formato de owners inválido');return list;}
@@ -18,8 +21,9 @@ function privateSender(ctx){
   return !ctx.chatId.endsWith('@g.us') && (!ctx.rawMessage?.key?.fromMe || (ctx.chatId===ctx.userId || ctx.selfChat===true)) && /^\d+@s\.whatsapp\.net$/.test(ctx.userId);
 }
 export async function ownerPriority(ctx){
+  // El owner global se reconoce también en grupos; las acciones sensibles siguen siendo privadas.
+  if(isPrimary(ctx.userId)) return 100;
   if(!privateSender(ctx)) return 0;
-  if(ctx.userId===primary()) return 100;
   return (await owners()).includes(ctx.userId) ? 90 : 0;
 }
 export async function isAdmin(ctx){return (await ownerPriority(ctx))>=90;}
@@ -32,13 +36,14 @@ export async function handleAdmin(ctx) {
   if(ctx.command==='admin') return ctx.reply('👑 *Administración*\n\n'+adminMenuLines().join('\n'));
   const priority=await ownerPriority(ctx);
   if(priority<90) return ctx.reply('Acceso administrativo denegado.');
+  if(ctx.chatId.endsWith('@g.us') && !['reload','restart','update'].includes(ctx.command)) return ctx.reply('Por seguridad, ejecuta este comando administrativo en privado.');
   if(primaryOnly.has(ctx.command) && priority<100) return ctx.reply('Solo el propietario principal puede ejecutar este comando.');
   const [file,token]=ctx.args;
   const cmd=ctx.command;
   audit('administración: '+cmd);
   if(cmd==='owners') return ctx.reply('Principal: '+primary().split('@')[0]+' (100)\n'+(await owners()).map(x=>x.split('@')[0]+' (90)').join('\n'));
   if(cmd==='setowner' || cmd==='delowner'){
-    if(ctx.userId!==primary()) return ctx.reply('Solo el propietario principal puede administrar owners.');
+    if(!isPrimary(ctx.userId)) return ctx.reply('Solo el propietario principal puede administrar owners.');
     const number=ctx.args.join('').replace(/^\+/,'').replace(/-/g,'');
     if(!/^\d{8,15}$/.test(number)) return ctx.reply('Indica el número internacional.');
     const jid=number+'@s.whatsapp.net';
@@ -85,7 +90,7 @@ export async function handleAdmin(ctx) {
   }
   if(cmd==='logs') return ctx.reply(readAudit().join('\n') || 'Sin eventos registrados.');
   if(cmd==='reload'){await reloadCommands();return ctx.reply('Comandos recargados: '+commands.size);}
-  const key=ctx.userId+':'+cmd;
+  const key=(isPrimary(ctx.userId)?primary():ctx.userId)+':'+ctx.chatId+':'+cmd;
   const entry=pending.get(key);
   if(!entry || entry.token!==file || entry.until<Date.now()){
     const value=randomBytes(4).toString('hex');
