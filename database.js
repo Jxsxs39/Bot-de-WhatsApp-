@@ -1,5 +1,4 @@
 import path from 'node:path';
-// import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 
 const DEFAULT_DB_PATH = path.resolve(process.cwd(), 'data', 'bot.db');
