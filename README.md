@@ -26,11 +26,13 @@ Si sqlite3 necesita compilarse en Termux, instala python, make y clang. Si falla
 - .gitignore: evita publicar archivos privados o generados.
 
 ## Comandos
-.menu, .historia, .dato, .perfil, .stats, .work, .daily, .ping, .tt, .chatgpt, .pin, .s1, .s2. Los owners pueden ver administración con `.admin` y subbots con `.code`.
+.menu, .historia, .dato, .perfil, .stats, .calc, .work, .daily, .ping, .tt, .chatgpt, .pin, .s1, .s2. Los owners pueden ver administración con `.admin` y subbots con `.code`.
 Work tiene espera de 5 minutos y daily de 24 horas. Los juegos todavía no están implementados; los comandos administrativos se consultan con `.admin`.
 También se aceptan comandos con prefijo `.` enviados desde la cuenta vinculada; sus mensajes propios sin prefijo se ignoran para evitar respuestas en bucle.
 
 `.ping` confirma que el bot está activo. `.tt <enlace>` valida enlaces de TikTok y recuerda usar la descarga oficial si el creador la habilitó; no descarga contenido automáticamente.
+
+`.calc <operación>` resuelve sumas, restas, multiplicaciones, divisiones, módulo y potencias; acepta paréntesis y decimales con punto o coma. Ejemplos: `.calc (12 + 8) / 4`, `.calc 2^8`.
 
 `.pin <contexto>` busca hasta tres fotos relacionadas en Wikimedia Commons y complementa los resultados con Wikipedia y Bing Imágenes cuando hace falta. Envía las imágenes sin texto ni pies de foto. También se acepta `.pinterest <contexto>`.
 
