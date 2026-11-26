@@ -9,7 +9,7 @@ import {createCommandHandler} from './handler.js';
 // Permisos privados para los archivos nuevos de sesión y base de datos.
 process.umask(0o077);
 const db=new Database();
-let socket, retry, pairingTimer, stopping=false, attempts=0, queue=Promise.resolve(), rl;
+let socket, retry, stopping=false, attempts=0, queue=Promise.resolve(), rl;
 // Render y otros servidores sin terminal pueden proporcionar el número por variable de entorno.
 // Render Web Service exige un puerto HTTP. No expone datos ni credenciales del bot.
 const healthServer=process.env.PORT ? startHealthServer(process.env.PORT) : undefined;
@@ -17,7 +17,7 @@ let phone=process.env.WHATSAPP_PHONE?.replace(/\D/g,'');
 // Crea el socket y recupera la sesión existente; no pide otro código si ya está registrada.
 async function connect() {
   if(stopping) return;
-  const {state,saveCreds}=await useMultiFileAuthState('sesion_historia');
+  const {state,saveCreds}=await useMultiFileAuthState(process.env.WHATSAPP_SESSION_DIR || 'sesion_historia');
   if(!state.creds.registered && !phone) {
     if (!process.stdin.isTTY) throw new Error('Configura WHATSAPP_PHONE en las variables de entorno del servidor');
     rl=createInterface({input:process.stdin,output:process.stdout});
@@ -30,6 +30,19 @@ async function connect() {
   const sock=makeWASocket({version,auth:state,logger:pino({level:'silent'}),browser:['Ubuntu','Chrome','22.04']});
   socket=sock;
   const handler=createCommandHandler(sock,db);
+  let pairingRequested=false;
+  // Espera la señal QR de Baileys: indica que el servidor está listo para vincular.
+  const requestCode=async()=>{
+    if(pairingRequested || state.creds.registered || stopping || socket!==sock) return;
+    pairingRequested=true;
+    try {
+      const code=await sock.requestPairingCode(phone);
+      if(socket===sock && !stopping) console.log('Código de vinculación:',code);
+    } catch(err) {
+      console.error('Solicitud de vinculación fallida; estado:',err?.output?.statusCode ?? err?.name ?? 'desconocido');
+      if(socket===sock && !stopping) sock.end(undefined);
+    }
+  };
   // La cola evita escrituras y procesamiento simultáneos fuera de orden.
   const onCreds=()=>{queue=queue.then(saveCreds).catch(()=>console.error('No se pudo guardar la sesión'));};
   const onMessages=({messages,type})=>{
@@ -38,18 +51,19 @@ async function connect() {
   };
   // Retira los listeners del socket anterior para evitar respuestas duplicadas.
   const cleanup=()=>{
-    clearTimeout(pairingTimer);
     sock.ev.off('creds.update',onCreds);
     sock.ev.off('messages.upsert',onMessages);
     sock.ev.off('connection.update',onConnection);
   };
   // Distingue desconexiones recuperables de una sesión revocada.
-  const onConnection=({connection,lastDisconnect})=>{
+  const onConnection=({connection,lastDisconnect,qr})=>{
     if(socket!==sock||stopping) return;
+    if(qr && !state.creds.registered) void requestCode();
     if(connection==='open'){attempts=0;console.log('Historia Reiss conectada. Prefijo +');}
     if(connection==='close'){
       cleanup();socket=null;
       const code=lastDisconnect?.error?.output?.statusCode;
+      console.log('Conexión cerrada; estado:',code ?? 'desconocido');
       if(code===DisconnectReason.loggedOut || code===DisconnectReason.connectionReplaced){
         console.error('Sesión cerrada o reemplazada. Revisa dispositivos vinculados.');void shutdown();return;
       }
@@ -59,12 +73,7 @@ async function connect() {
   sock.ev.on('creds.update',onCreds);
   sock.ev.on('messages.upsert',onMessages);
   sock.ev.on('connection.update',onConnection);
-  // Solicita un código solo para una sesión nueva; nunca se publica en GitHub.
-  if(!state.creds.registered) pairingTimer=setTimeout(async()=>{
-    if(stopping||socket!==sock) return;
-    try {console.log('Código de vinculación:',await sock.requestPairingCode(phone));}
-    catch {console.error('No se pudo vincular. Reinicia y comprueba el número.');void shutdown();}
-  },3000);
+  // El código se solicita desde connection.update, no mediante un tiempo fijo.
 }
 // Espera creciente para evitar reconectar sin parar.
 function schedule(){
@@ -73,7 +82,7 @@ function schedule(){
 }
 // Cierre ordenado: cancela temporizadores, espera mensajes y cierra SQLite.
 async function shutdown(){
-  if(stopping)return;stopping=true;clearTimeout(retry);clearTimeout(pairingTimer);rl?.close();
+  if(stopping)return;stopping=true;clearTimeout(retry);rl?.close();
   socket?.end(undefined);healthServer?.close();await queue;await db.close();
 }
 process.on('SIGINT',()=>void shutdown());
