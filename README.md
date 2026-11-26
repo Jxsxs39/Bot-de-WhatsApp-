@@ -26,11 +26,13 @@ Si sqlite3 necesita compilarse en Termux, instala python, make y clang. Si falla
 - .gitignore: evita publicar archivos privados o generados.
 
 ## Comandos
-.menu, .historia, .dato, .perfil, .stats, .work, .daily, .ping, .tt, .chatgpt, .s1, .s2. Los owners pueden ver administración con `.admin` y subbots con `.code`.
+.menu, .historia, .dato, .perfil, .stats, .work, .daily, .ping, .tt, .chatgpt, .pin, .s1, .s2. Los owners pueden ver administración con `.admin` y subbots con `.code`.
 Work tiene espera de 5 minutos y daily de 24 horas. Los juegos todavía no están implementados; los comandos administrativos se consultan con `.admin`.
 También se aceptan comandos con prefijo `.` enviados desde la cuenta vinculada; sus mensajes propios sin prefijo se ignoran para evitar respuestas en bucle.
 
 `.ping` confirma que el bot está activo. `.tt <enlace>` valida enlaces de TikTok y recuerda usar la descarga oficial si el creador la habilitó; no descarga contenido automáticamente.
+
+`.pin <contexto>` envía hasta tres fotos relacionadas con licencia libre de Wikimedia Commons e incluye atribución y un enlace de búsqueda de Pinterest; también se acepta `.pinterest <contexto>`.
 
 `.chatgpt <pregunta>` consulta la API de OpenAI y responde con una personalidad cálida inspirada en Historia Reiss. Configura `OPENAI_API_KEY` en las variables del hosting; opcionalmente, `OPENAI_MODEL` cambia el modelo (por defecto `gpt-4o-mini`). El texto después del comando se envía a OpenAI y el uso de la API puede tener costo. Cada consulta es independiente y admite hasta 4.000 caracteres.
 

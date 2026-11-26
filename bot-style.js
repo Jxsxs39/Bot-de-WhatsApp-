@@ -2,6 +2,8 @@ const commandEmojis = {
   id: '🪞',
   ping: '🏓',
   tt: '🎬',
+  pin: '📌',
+  pinterest: '📌',
   menu: '📜',
   historia: '🌼',
   dato: '🏛️',
