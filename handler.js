@@ -1,8 +1,10 @@
 import {audit} from './admin-audit.js';
 import {adminNames,handleAdmin} from './commands/admin.js';
 import { commands } from './commands/index.js';
-import { normalizeMessageContent } from '@whiskeysockets/baileys';
+import { handlePendingAudioSticker } from './commands/stickers.js';
+import { normalizeMessageContent } from '@rexxhayanasi/elaina-baileys';
 import { styleBotReply } from './bot-style.js';
+import { sendAudioSticker } from './audio-sticker.js';
 
 function normalizeJid(jid) {
   return typeof jid === 'string' ? jid.replace(/:\d+@/, '@') : undefined;
@@ -62,6 +64,16 @@ export function createCommandHandler(sock, db, reloadSocket) {
       console.log('[RESPUESTA] Imagen enviada al chat');
       return result;
     };
+    const replyWithSticker = async (sticker, isAnimated = false) => {
+      const result = await sock.sendMessage(ctx.chatId, { sticker, isAnimated });
+      console.log('[RESPUESTA] Sticker enviado al chat');
+      return result;
+    };
+    const replyWithAudioSticker = async (sticker, isAnimated, audio, duration) => {
+      const result = await sendAudioSticker(sock, ctx.chatId, sticker, isAnimated, audio, duration);
+      console.log('[RESPUESTA] Audio sticker enviado al chat');
+      return result;
+    };
     let stage='registro SQLite';
     try {
       // Resuelve LID mediante el mapa autenticado de Baileys, nunca mediante texto del usuario.
@@ -70,28 +82,21 @@ export function createCommandHandler(sock, db, reloadSocket) {
       }
       // Cuenta mensajes normales también; solo los comandos reciben respuesta.
       await db.registerMessage(ctx.userId);
-      if (!ctx.command) return;
+      if (!ctx.command) {
+        return await handlePendingAudioSticker({
+          ...ctx, db, reply, replyWithAudioSticker, sock, rawMessage: msg
+        });
+      }
       if(adminNames.has(ctx.command)) { stage='autorización administrativa'; return await handleAdmin({...ctx,reply,rawMessage:msg,sock,reloadSocket}); }
       stage='búsqueda de comando';
       const cmd = commands.get(ctx.command);
       console.log('[COMANDO]', cmd ? ctx.command : 'desconocido');
       if (!cmd) return await reply('❌ Comando no encontrado. Escribe .menu.');
       stage='ejecución o envío';
-      const replyWithSticker = async (sticker, isAnimated = false) => {
-        const result = await sock.sendMessage(ctx.chatId, { sticker, isAnimated });
-        console.log('[RESPUESTA] Sticker enviado al chat');
-        return result;
-      };
-      const replyWithAudio = async audio => {
-        const result = await sock.sendMessage(ctx.chatId, {
-          audio,
-          mimetype: 'audio/ogg; codecs=opus',
-          ptt: false
-        });
-        console.log('[RESPUESTA] Audio enviado al chat');
-        return result;
-      };
-      await cmd.run({ ...ctx, db, reply, replyWithImage, replyWithSticker, replyWithAudio, commands, sock, rawMessage: msg });
+      await cmd.run({
+        ...ctx, db, reply, replyWithImage, replyWithSticker, replyWithAudioSticker,
+        commands, sock, rawMessage: msg
+      });
       audit('comando completado: '+ctx.command);
       console.log('[COMANDO] Finalizado');
     } catch (error) {
