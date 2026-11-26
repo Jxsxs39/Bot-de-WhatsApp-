@@ -25,7 +25,7 @@ export async function ownerPriority(ctx){
 export async function isAdmin(ctx){return (await ownerPriority(ctx))>=90;}
 export const adminNames=new Set(['getcode','setcode','savefile','test','update','restart','reload','logs','setowner','delowner','owners','admin','rollback']);
 // Una sola política controla el menú y la ejecución administrativa.
-const primaryOnly=new Set(['setcode','savefile','rollback','setowner','delowner']);
+const primaryOnly=new Set(['setowner','delowner']);
 export function visibleAdminNames(priority){return [...adminNames].filter(name=>priority>=90 && (priority>=100 || !primaryOnly.has(name)));}
 export async function handleAdmin(ctx) {
   const priority=await ownerPriority(ctx);
@@ -60,7 +60,6 @@ export async function handleAdmin(ctx) {
       return;
     }
     if(cmd==='rollback'){
-      if(ctx.userId!==primary()) return ctx.reply('Solo el owner principal puede restaurar código.');
       const previous=await readFile('.admin-stage/'+target+'.backup','utf8');
       await writeFile('commands/'+target+'.tmp',previous,{mode:0o600});
       await rename('commands/'+target+'.tmp','commands/'+target);
@@ -71,14 +70,12 @@ export async function handleAdmin(ctx) {
     const code=source?.conversation || source?.extendedTextMessage?.text;
     if(!code || Buffer.byteLength(code)>65536) return ctx.reply('Responde a un mensaje de código de hasta 64 KiB.');
     await mkdir('.admin-stage',{recursive:true,mode:0o700});
-    if(cmd!=='test' && ctx.userId!==primary()) return ctx.reply('Solo el owner principal puede modificar código activo.');
     const candidate='.admin-stage/'+target;
     await writeFile(candidate,code,{mode:0o600});
     try {await run(process.execPath,['--check',candidate],{timeout:10000});}
     catch{return ctx.reply('Sintaxis inválida. El archivo activo no cambió.');}
     if(cmd==='test') return ctx.reply('Sintaxis válida. No se ejecutó el código.');
-    // Solo el propietario principal puede instalar código ejecutable.
-    if(ctx.userId!==primary()) return ctx.reply('Solo el owner principal puede modificar código activo.');
+    // Todos los owners autorizados pueden instalar código ejecutable.
     const path='commands/'+target;
     await writeFile(candidate+'.backup',await readFile(path),{mode:0o600});
     await writeFile(path+'.tmp',code,{mode:0o600});
