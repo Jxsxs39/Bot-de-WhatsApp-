@@ -17,13 +17,13 @@ async function owners(){
   try {const list=JSON.parse(await readFile(ownerFile(),'utf8'));if(!Array.isArray(list)) throw new Error('Formato de owners inválido');return list;}
   catch(e){if(e.code==='ENOENT') return [];throw e;}
 }
-function privateSender(ctx){
-  return !ctx.chatId.endsWith('@g.us') && (!ctx.rawMessage?.key?.fromMe || (ctx.chatId===ctx.userId || ctx.selfChat===true)) && /^\d+@s\.whatsapp\.net$/.test(ctx.userId);
+function authenticatedSender(ctx){
+  return /^\d+@(s\.whatsapp\.net|lid)$/.test(ctx.userId);
 }
 export async function ownerPriority(ctx){
-  // El owner global se reconoce también en grupos; las acciones sensibles siguen siendo privadas.
+  // Los permisos dependen del remitente autenticado, no del tipo de chat.
+  if(!authenticatedSender(ctx)) return 0;
   if(isPrimary(ctx.userId)) return 100;
-  if(!privateSender(ctx)) return 0;
   return (await owners()).includes(ctx.userId) ? 90 : 0;
 }
 export async function isAdmin(ctx){return (await ownerPriority(ctx))>=90;}
@@ -36,7 +36,6 @@ export async function handleAdmin(ctx) {
   if(ctx.command==='admin') return ctx.reply('👑 *Administración*\n\n'+adminMenuLines().join('\n'));
   const priority=await ownerPriority(ctx);
   if(priority<90) return ctx.reply('Acceso administrativo denegado.');
-  if(ctx.chatId.endsWith('@g.us') && !['reload','restart','update'].includes(ctx.command)) return ctx.reply('Por seguridad, ejecuta este comando administrativo en privado.');
   if(primaryOnly.has(ctx.command) && priority<100) return ctx.reply('Solo el propietario principal puede ejecutar este comando.');
   const [file,token]=ctx.args;
   const cmd=ctx.command;
