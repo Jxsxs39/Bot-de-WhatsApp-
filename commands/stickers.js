@@ -40,6 +40,21 @@ function startAudioStickerSession(ctx, sticker) {
   });
 }
 
+export async function withGenerationNotice(ctx, operation) {
+  const notice = await ctx.reply('⏳ Tu sticker se está generando…');
+  try {
+    return await operation();
+  } finally {
+    if (notice?.key) {
+      try {
+        await ctx.sock.sendMessage(ctx.chatId, { delete: notice.key });
+      } catch (error) {
+        console.error('[STICKER] No se pudo borrar el aviso de generación:', error?.name || 'Error');
+      }
+    }
+  }
+}
+
 async function completeAudioSticker(ctx, session, source) {
   const key = sessionKey(ctx);
   if (session.processing) {
@@ -48,11 +63,13 @@ async function completeAudioSticker(ctx, session, source) {
   }
   session.processing = true;
   try {
-    const audioBuffer = await downloadStickerMedia(source, ctx.sock);
-    const { audio, duration } = await convertAudioStickerAudio(audioBuffer, source.mimetype);
-    await ctx.replyWithAudioSticker(session.sticker, session.isAnimated, audio, duration);
-    clearSession(key);
-    await ctx.reply('✨ ¡Tu audio sticker está listo! Toca el sticker para escuchar el audio.');
+    await withGenerationNotice(ctx, async () => {
+      const audioBuffer = await downloadStickerMedia(source, ctx.sock);
+      const { audio, duration } = await convertAudioStickerAudio(audioBuffer, source.mimetype);
+      await ctx.replyWithAudioSticker(session.sticker, session.isAnimated, audio, duration);
+      clearSession(key);
+      await ctx.reply('✨ ¡Tu audio sticker está listo! Toca el sticker para escuchar el audio.');
+    });
   } catch (error) {
     session.processing = false;
     if (error instanceof StickerMediaError) {
@@ -100,28 +117,30 @@ async function createSticker(ctx, includeAudio) {
       : 'Responde a una foto o video con .s2 o envíalo con .s2 en el caption.');
   }
 
-  try {
-    const buffer = await downloadStickerMedia(source, ctx.sock);
-    const result = await createStickerMedia(buffer, source.type, includeAudio);
-    if (includeAudio && source.type === 'image') {
-      startAudioStickerSession(ctx, result.sticker);
-      return ctx.reply('🖼️ Foto lista para sticker. Envía un audio o responde a uno en los próximos 60 segundos; duración máxima 25 segundos. Usa .s1 cancelar para detener la sesión.');
-    }
+  await withGenerationNotice(ctx, async () => {
+    try {
+      const buffer = await downloadStickerMedia(source, ctx.sock);
+      const result = await createStickerMedia(buffer, source.type, includeAudio);
+      if (includeAudio && source.type === 'image') {
+        startAudioStickerSession(ctx, result.sticker);
+        return ctx.reply('🖼️ Foto lista para sticker. Envía un audio o responde a uno en los próximos 60 segundos; duración máxima 25 segundos. Usa .s1 cancelar para detener la sesión.');
+      }
 
-    if (includeAudio && result.audio) {
-      await ctx.replyWithAudioSticker(result.sticker, true, result.audio, result.duration);
-      return;
-    }
+      if (includeAudio && result.audio) {
+        await ctx.replyWithAudioSticker(result.sticker, true, result.audio, result.duration);
+        return;
+      }
 
-    await ctx.replyWithSticker(result.sticker, source.type === 'video');
-    if (includeAudio) {
-      await ctx.reply('El video no tenía audio; envié el sticker animado sin sonido.');
+      await ctx.replyWithSticker(result.sticker, source.type === 'video');
+      if (includeAudio) {
+        await ctx.reply('El video no tenía audio; envié el sticker animado sin sonido.');
+      }
+    } catch (error) {
+      if (!(error instanceof StickerMediaError)) throw error;
+      console.error('[STICKER]', error.code, error.message, error.details || '');
+      await ctx.reply(error.userMessage);
     }
-  } catch (error) {
-    if (!(error instanceof StickerMediaError)) throw error;
-    console.error('[STICKER]', error.code, error.message, error.details || '');
-    await ctx.reply(error.userMessage);
-  }
+  });
 }
 
 export default [

@@ -25,13 +25,18 @@ export async function ownerPriority(ctx){
   return (await owners()).includes(ctx.userId) ? 90 : 0;
 }
 export async function isAdmin(ctx){return (await ownerPriority(ctx))>=90;}
-export const adminNames=new Set(['getcode','setcode','savefile','test','update','restart','reload','logs','setowner','delowner','owners','admin','rollback']);
+export const adminNames=new Set(['code','getcode','setcode','savefile','test','update','restart','reload','logs','setowner','delowner','owners','admin','rollback']);
 // Una sola política controla el menú y la ejecución administrativa.
 const primaryOnly=new Set(['setowner','delowner']);
 export function visibleAdminNames(priority){return [...adminNames].filter(name=>priority>=90 && (priority>=100 || !primaryOnly.has(name)));}
-export function adminMenuLines(){return [...adminNames].map(n=>'• .'+n+' — '+(n==='admin'?'Todos':primaryOnly.has(n)?'Solo owner principal':n==='reload'?'Owners o dueño del socket':'Solo owners'));}
+export function adminMenuLines(){return [...adminNames].map(n=>'• .'+n+' — '+(n==='admin'?'Todos':n==='code'?'Solicitar subbot; activar/desactivar solo owners':primaryOnly.has(n)?'Solo owner principal':n==='reload'?'Owners o dueño del socket':'Solo owners'));}
 export async function handleAdmin(ctx) {
   if(ctx.command==='admin') return ctx.reply('👑 *Administración*\n\n'+adminMenuLines().join('\n'));
+  if(ctx.command==='code' && !['on','off','status'].includes((ctx.args?.[0] || '').toLowerCase())) {
+    if(ctx.args?.length) return ctx.reply('Uso: .code para vincular tu propia cuenta; .code on/off/status para administración.');
+    if(!ctx.subbots) return ctx.reply('El servicio de subbots no está disponible.');
+    return ctx.subbots.requestPairingCode(ctx);
+  }
   const priority=await ownerPriority(ctx);
   // El dueño del socket se verifica con la identidad de la sesión vinculada.
   const socketIds=[ctx.sock?.user?.id,ctx.sock?.user?.lid,ctx.sock?.user?.phoneNumber].filter(x=>typeof x==='string').map(x=>x.replace(/:\d+@/,'@'));
@@ -41,6 +46,18 @@ export async function handleAdmin(ctx) {
   const [file,token]=ctx.args;
   const cmd=ctx.command;
   audit('administración: '+cmd);
+  if(cmd==='code') {
+    if(!ctx.subbots) return ctx.reply('El servicio de subbots no está disponible.');
+    const action=(ctx.args?.[0] || '').toLowerCase();
+    if(action==='status') {
+      const {codeEnabled,connected,registered,pending}=ctx.subbots.getStatus();
+      return ctx.reply(`.code está ${codeEnabled?'activado':'desactivado'}.\nSubbots conectados: ${connected}.\nSesiones registradas: ${registered}.\nVinculaciones pendientes: ${pending}.`);
+    }
+    if(action!=='on' && action!=='off') return ctx.reply('Uso: .code on, .code off o .code status.');
+    if(ctx.args.length!==1) return ctx.reply('Uso: .code on, .code off o .code status.');
+    await ctx.subbots.setCodeEnabled(action==='on');
+    return ctx.reply(action==='on'?'El comando .code está activado.':'El comando .code está desactivado; las sesiones actuales siguen conectadas.');
+  }
   if(cmd==='owners') return ctx.reply('Principal: '+primary().split('@')[0]+' (100)\n'+(await owners()).map(x=>x.split('@')[0]+' (90)').join('\n'));
   if(cmd==='setowner' || cmd==='delowner'){
     if(!isPrimary(ctx.userId)) return ctx.reply('Solo el propietario principal puede administrar owners.');

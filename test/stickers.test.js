@@ -15,6 +15,7 @@ import {
   StickerMediaError
 } from '../sticker-media.js';
 import { sendAudioSticker } from '../audio-sticker.js';
+import { withGenerationNotice } from '../commands/stickers.js';
 
 test('sticker source can be direct media or a quoted photo/video', () => {
   const direct = {
@@ -91,12 +92,45 @@ test('sticker commands explain how to attach media when none is provided', async
   }
 });
 
+test('.s1 muestra el progreso y borra el aviso al terminar o fallar', async () => {
+  const events = [];
+  const ctx = {
+    chatId: '123@s.whatsapp.net',
+    reply: async text => {
+      events.push(['reply', text]);
+      return { key: { remoteJid: '123@s.whatsapp.net', id: 'progress' } };
+    },
+    sock: {
+      sendMessage: async (chatId, content) => {
+        events.push(['delete', chatId, content.delete.id]);
+      }
+    }
+  };
+
+  await withGenerationNotice(ctx, async () => events.push(['generate']));
+  assert.deepEqual(events.map(event => event[0]), ['reply', 'generate', 'delete']);
+  assert.match(events[0][1], /se está generando/);
+
+  events.length = 0;
+  await assert.rejects(withGenerationNotice(ctx, async () => {
+    throw new Error('conversion failed');
+  }), /conversion failed/);
+  assert.deepEqual(events.map(event => event[0]), ['reply', 'delete']);
+});
+
 test('video conversion retries with a shorter clip after timing out', async () => {
   const stickerDurations = [];
   let audioDuration;
   const processRunner = async (_program, args) => {
+    if (args.includes('format=duration:format=format_name:stream=codec_name,sample_rate,channels')) {
+      return { stdout: JSON.stringify({
+        format: { duration: audioDuration, format_name: 'ogg' },
+        streams: [{ codec_name: 'opus', sample_rate: '48000', channels: 1 }]
+      }), stderr: '' };
+    }
     if (args.includes('format=duration')) return { stdout: '30', stderr: '' };
     if (args.includes('stream=codec_type')) return { stdout: 'audio', stderr: '' };
+    if (args.includes('null')) return { stdout: '', stderr: '' };
     if (args.includes('-c:v')) {
       const duration = Number(args[args.indexOf('-t') + 1]);
       stickerDurations.push(duration);
@@ -106,7 +140,9 @@ test('video conversion retries with a shorter clip after timing out', async () =
     }
     if (args.includes('-c:a')) {
       audioDuration = Number(args[args.indexOf('-t') + 1]);
-      await writeFile(args[args.length - 1], Buffer.from('fake-audio'));
+      assert.ok(args.includes('aresample=async=1:first_pts=0,asetpts=N/SR/TB'));
+      assert.ok(args.includes('make_zero'));
+      await writeFile(args[args.length - 1], Buffer.from('OggS-fake-audio'));
       return { stdout: '', stderr: '' };
     }
     assert.fail(`Unexpected process args: ${args.join(' ')}`);
@@ -116,7 +152,7 @@ test('video conversion retries with a shorter clip after timing out', async () =
   assert.deepEqual(stickerDurations, [25, 10]);
   assert.equal(audioDuration, 10);
   assert.equal(result.duration, 10);
-  assert.equal(result.audio.toString(), 'fake-audio');
+  assert.equal(result.audio.toString(), 'OggS-fake-audio');
 });
 
 test('audio sticker conversion caps audio at 25 seconds', async () => {
@@ -124,10 +160,15 @@ test('audio sticker conversion caps audio at 25 seconds', async () => {
     Buffer.from('audio input'),
     'audio/mpeg',
     async (program, args) => {
-      if (args.includes('-show_entries')) return { stdout: '27.5', stderr: '' };
+      if (args.includes('-show_entries')) return { stdout: JSON.stringify({
+        format: { duration: '27.5', format_name: 'ogg' },
+        streams: [{ codec_name: 'opus', sample_rate: '48000', channels: 1 }]
+      }), stderr: '' };
+      if (args.includes('null')) return { stdout: '', stderr: '' };
       if (program.toLowerCase().includes('ffmpeg')) {
         assert.ok(args.includes('-t'));
         assert.ok(args.includes('25'));
+        assert.ok(args.includes('aresample=async=1:first_pts=0,asetpts=N/SR/TB'));
         await writeFile(args[args.length - 1], Buffer.from('OggS-audio'));
         return { stdout: '', stderr: '' };
       }

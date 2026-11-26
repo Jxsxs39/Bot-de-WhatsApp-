@@ -4,12 +4,16 @@ import pino from 'pino';
 import {createInterface} from 'node:readline/promises';
 import Database from './database.js';
 import {createCommandHandler} from './handler.js';
+import {MessageDeduplicator} from './message-deduplicator.js';
+import {SubbotManager} from './subbot-manager.js';
 
 // Una base de datos para toda la vida del proceso, no una por reconexión.
 // Permisos privados para los archivos nuevos de sesión y base de datos.
 process.umask(0o077);
 const db=new Database();
 let socket, retry, stopping=false, attempts=0, queue=Promise.resolve(), rl;
+let subbots;
+const messageDeduplicator=new MessageDeduplicator();
 // Render y otros servidores sin terminal pueden proporcionar el número por variable de entorno.
 // Render Web Service exige un puerto HTTP. No expone datos ni credenciales del bot.
 const healthServer=process.env.PORT ? startHealthServer(process.env.PORT) : undefined;
@@ -32,7 +36,7 @@ async function connect() {
   // Recarga solo la conexión actual, conservando la sesión y la base de datos.
   const handler=createCommandHandler(sock,db,()=>{
     setTimeout(()=>{if(!stopping && socket===sock) sock.end(undefined);},500).unref();
-  });
+  },subbots);
   let pairingRequested=false;
   // Espera la señal QR de Baileys: indica que el servidor está listo para vincular.
   const requestCode=async()=>{
@@ -52,7 +56,7 @@ async function connect() {
     // Registra solo metadatos del evento, nunca el texto ni los números.
     console.log('[EVENTO] messages.upsert:',type,'cantidad:',messages.length);
     if(type!=='notify'||stopping||socket!==sock) { console.log('[EVENTO] Ignorado por tipo o estado del socket'); return; }
-    queue=queue.then(async()=>{for(const msg of messages) await handler.handleMessage(msg);}).catch(()=>console.error('[ERROR] Cola de mensajes'));
+    queue=queue.then(async()=>{for(const msg of messages) await messageDeduplicator.dispatch(handler,msg);}).catch(()=>console.error('[ERROR] Cola de mensajes'));
   };
   // Retira los listeners del socket anterior para evitar respuestas duplicadas.
   const cleanup=()=>{
@@ -88,9 +92,18 @@ function schedule(){
 // Cierre ordenado: cancela temporizadores, espera mensajes y cierra SQLite.
 async function shutdown(){
   if(stopping)return;stopping=true;clearTimeout(retry);rl?.close();
-  socket?.end(undefined);healthServer?.close();await queue;await db.close();
+  socket?.end(undefined);healthServer?.close();await subbots?.shutdown();await queue;await db.close();
 }
 process.on('SIGINT',()=>void shutdown());
 process.on('SIGTERM',()=>void shutdown());
-try {await db.init();console.log('[SQLite] Base de datos lista');await connect();}
+try {
+  await db.init();
+  console.log('[SQLite] Base de datos lista');
+  subbots=new SubbotManager({
+    createCommandHandler:sock=>createCommandHandler(sock,db,undefined,subbots),
+    dispatchMessage:(handler,msg)=>messageDeduplicator.dispatch(handler,msg)
+  });
+  await subbots.start();
+  await connect();
+}
 catch(err){console.error('No se pudo iniciar:',err.message);process.exitCode=1;await shutdown();}

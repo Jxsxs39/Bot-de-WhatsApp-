@@ -115,41 +115,42 @@ export async function downloadStickerMedia(source, sock) {
   return Buffer.concat(chunks, total);
 }
 
-export async function convertAudioStickerAudio(buffer, mimeType = '', processRunner = run) {
-  if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
-    throw new StickerMediaError('EMPTY_MEDIA', 'Downloaded audio was empty', 'No pude descargar ese audio.');
-  }
-  if (buffer.length > MAX_MEDIA_BYTES) {
-    throw new StickerMediaError('MEDIA_TOO_LARGE', 'Audio exceeded the processing limit', 'El audio supera el límite de 16 MB.');
-  }
-
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'whatsapp-audio-sticker-'));
-  const normalizedMime = mimeType.toLowerCase();
-  const extension = /ogg|opus/.test(normalizedMime) ? '.ogg'
-    : /wav/.test(normalizedMime) ? '.wav'
-      : /mp4|m4a|aac/.test(normalizedMime) ? '.m4a' : '.mp3';
-  const inputPath = path.join(directory, `input${extension}`);
-  const outputPath = path.join(directory, 'audio.ogg');
+async function encodeOggOpus(inputPath, outputPath, maxDuration, processRunner) {
   const ffmpeg = process.env.FFMPEG_PATH || 'ffmpeg';
   const ffprobe = process.env.FFPROBE_PATH || 'ffprobe';
-
   try {
-    await writeFile(inputPath, buffer);
     await processRunner(ffmpeg, [
       '-hide_banner', '-loglevel', 'error', '-y',
-      '-i', inputPath, '-vn', '-map', '0:a:0', '-t', '25',
+      '-fflags', '+genpts', '-i', inputPath, '-vn', '-map', '0:a:0', '-t', String(maxDuration),
+      '-map_metadata', '-1', '-af', 'aresample=async=1:first_pts=0,asetpts=N/SR/TB',
+      '-avoid_negative_ts', 'make_zero',
       '-c:a', 'libopus', '-b:a', '48k', '-ac', '1', '-ar', '48000', '-f', 'ogg', outputPath
+    ]);
+    await processRunner(ffmpeg, [
+      '-hide_banner', '-loglevel', 'error', '-i', outputPath, '-map', '0:a:0', '-f', 'null', '-'
     ]);
     const audio = await readFile(outputPath);
     const probe = await processRunner(ffprobe, [
-      '-v', 'error', '-show_entries', 'format=duration',
-      '-of', 'default=noprint_wrappers=1:nokey=1', outputPath
+      '-v', 'error', '-show_entries', 'format=duration:format=format_name:stream=codec_name,sample_rate,channels',
+      '-of', 'json', outputPath
     ]);
-    const duration = Number(probe.stdout.trim());
-    if (!Number.isFinite(duration) || duration <= 0) {
-      throw new StickerMediaError('INVALID_AUDIO', 'Converted audio has no measurable duration', 'No pude leer la duración del audio.');
+    let metadata;
+    try {
+      metadata = JSON.parse(probe.stdout);
+    } catch {
+      throw new StickerMediaError('INVALID_AUDIO', 'Converted audio metadata is invalid', 'No pude validar el audio convertido.');
     }
-    return { audio, duration: Math.min(duration, 25) };
+    const duration = Number(metadata.format?.duration);
+    const audioStream = metadata.streams?.find(stream => stream.codec_name === 'opus');
+    if (
+      !Number.isFinite(duration) || duration <= 0 ||
+      !String(metadata.format?.format_name || '').split(',').includes('ogg') ||
+      !audioStream || Number(audioStream.sample_rate) !== 48000 || Number(audioStream.channels) !== 1 ||
+      audio.toString('ascii', 0, 4) !== 'OggS'
+    ) {
+      throw new StickerMediaError('INVALID_AUDIO', 'Converted audio is not valid mono Opus in Ogg', 'El audio del video está dañado o no es compatible. Prueba con otro video.');
+    }
+    return { audio, duration: Math.min(duration, maxDuration) };
   } catch (error) {
     if (error instanceof StickerMediaError) throw error;
     throw new StickerMediaError(
@@ -157,6 +158,31 @@ export async function convertAudioStickerAudio(buffer, mimeType = '', processRun
       error.message,
       'No pude convertir el audio. Prueba con un archivo de audio compatible.'
     );
+  }
+}
+
+export async function convertAudioStickerAudio(buffer, mimeType = '', processRunner = run, maxDuration = 25) {
+  if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+    throw new StickerMediaError('EMPTY_MEDIA', 'Downloaded audio was empty', 'No pude descargar ese audio.');
+  }
+  if (buffer.length > MAX_MEDIA_BYTES) {
+    throw new StickerMediaError('MEDIA_TOO_LARGE', 'Audio exceeded the processing limit', 'El audio supera el límite de 16 MB.');
+  }
+  if (!Number.isFinite(maxDuration) || maxDuration <= 0) {
+    throw new StickerMediaError('INVALID_DURATION', 'Audio duration limit is invalid');
+  }
+
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'whatsapp-audio-sticker-'));
+  const normalizedMime = mimeType.toLowerCase();
+  const extension = /ogg|opus/.test(normalizedMime) ? '.ogg'
+    : /wav/.test(normalizedMime) ? '.wav'
+      : /video\//.test(normalizedMime) ? '.mp4'
+        : /mp4|m4a|aac/.test(normalizedMime) ? '.m4a' : '.mp3';
+  const inputPath = path.join(directory, `input${extension}`);
+  const outputPath = path.join(directory, 'audio.ogg');
+  try {
+    await writeFile(inputPath, buffer);
+    return await encodeOggOpus(inputPath, outputPath, Math.min(maxDuration, 25), processRunner);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -306,16 +332,13 @@ export async function createStickerMedia(buffer, type, includeAudio = false, pro
     }
 
     let audio = null;
+    let audioDuration = null;
     if (hasAudio) {
-      await processRunner(ffmpeg, [
-        '-hide_banner', '-loglevel', 'error', '-y',
-        '-t', String(videoDuration), '-i', inputPath,
-        '-t', String(videoDuration), '-map', '0:a:0', '-vn',
-        '-c:a', 'libopus', '-b:a', '64k', '-ac', '1', '-ar', '48000', '-f', 'ogg', audioPath
-      ]);
-      audio = await readFile(audioPath);
+      const convertedAudio = await encodeOggOpus(inputPath, audioPath, videoDuration, processRunner);
+      audio = convertedAudio.audio;
+      audioDuration = convertedAudio.duration;
     }
-    return { sticker: await readFile(stickerPath), audio, duration: videoDuration };
+    return { sticker: await readFile(stickerPath), audio, duration: audioDuration || videoDuration };
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

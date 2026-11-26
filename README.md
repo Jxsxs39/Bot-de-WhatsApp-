@@ -26,7 +26,7 @@ Si sqlite3 necesita compilarse en Termux, instala python, make y clang. Si falla
 - .gitignore: evita publicar archivos privados o generados.
 
 ## Comandos
-.menu, .historia, .dato, .perfil, .stats, .work, .daily, .ping, .tt, .chatgpt, .s1, .s2.
+.menu, .historia, .dato, .perfil, .stats, .work, .daily, .ping, .tt, .chatgpt, .s1, .s2. Los owners pueden ver administración con `.admin` y subbots con `.code`.
 Work tiene espera de 5 minutos y daily de 24 horas. Los juegos todavía no están implementados; los comandos administrativos se consultan con `.admin`.
 También se aceptan comandos con prefijo `.` enviados desde la cuenta vinculada; sus mensajes propios sin prefijo se ignoran para evitar respuestas en bucle.
 
@@ -37,6 +37,8 @@ También se aceptan comandos con prefijo `.` enviados desde la cuenta vinculada;
 `.s1` crea un audio sticker: con un video combina el sticker animado y su audio, con un máximo de 25 segundos; con una foto abre una sesión de 60 segundos para enviar o responder con un audio de hasta 25 segundos. Usa `.s1 cancelar` para cerrar la sesión. `.s2` crea un sticker sin audio desde una foto o video y recorta videos a 5 segundos. Responde al medio con el comando o envíalo como caption; los medios deben pesar menos de 16 MB. Si la conversión tarda demasiado o el sticker excede el tamaño permitido, el bot reintenta con videos más cortos. FFmpeg y ffprobe deben estar disponibles en el hosting; el runtime nativo de Render los incluye.
 
 El comando `.menu` muestra un banner de Historia Reiss junto con los comandos generales; los comandos administrativos se consultan con `.admin`. Las respuestas usan un marco visual con emojis y su tono cálido y regio. Los comandos `.getcode` y `.logs` conservan su salida sin adornos para que el código y los registros sigan siendo legibles. El bot requiere `@rexxhayanasi/elaina-baileys` 1.4.7, que incluye los campos Protobuf nativos para audio stickers.
+
+`.code` genera un código para vincular la propia cuenta como subbot. Por seguridad, solo se puede solicitar en un chat privado y el código no debe compartirse. El owner principal y los owners delegados (admins del bot) pueden controlar solicitudes con `.code on`, `.code off` y consultar sesiones con `.code status`. Desactivar `.code` invalida las vinculaciones pendientes, pero no desconecta los subbots existentes. Las sesiones se guardan en `sesion_subbots/`, así que configura almacenamiento persistente en el hosting.
 
 ## Seguridad
 Desvincula inmediatamente la sesión que se publicó anteriormente desde WhatsApp. Crea una nueva. Borrar archivos de una rama no borra el historial Git ni las copias existentes. No reutilices las credenciales publicadas. No subas node_modules, sesiones, bases de datos ni .env. Antes de actualizar, respalda tus datos localmente y no uses la misma sesión en dos procesos. Las estadísticas antiguas guardadas por grupo no se pueden repartir automáticamente entre participantes.
