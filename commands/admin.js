@@ -3,10 +3,8 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {commands,reloadCommands} from './index.js';
 import {audit,readAudit} from '../admin-audit.js';
-import {randomBytes} from 'node:crypto';
 const run=promisify(execFile);
 const files=new Set(['general.js','economy.js','stickers.js']);
-const pending=new Map();
 // El propietario principal fijo tiene prioridad 100 y no puede eliminarse por chat.
 const primary=()=> '584149164536@s.whatsapp.net';
 // Ambos identificadores pertenecen al mismo propietario principal.
@@ -100,22 +98,15 @@ export async function handleAdmin(ctx) {
   }
   if(cmd==='logs') return ctx.reply(readAudit().join('\n') || 'Sin eventos registrados.');
   if(cmd==='reload'){await reloadCommands();return ctx.reply('Comandos recargados: '+commands.size);}
-  const key=(isPrimary(ctx.userId)?primary():ctx.userId)+':'+ctx.chatId+':'+cmd;
-  const entry=pending.get(key);
-  if(!entry || entry.token!==file || entry.until<Date.now()){
-    const value=randomBytes(4).toString('hex');
-    pending.set(key,{token:value,until:Date.now()+60000});
-    return ctx.reply('Confirma en 60 segundos: .'+cmd+' '+value);
-  }
-  pending.delete(key);
   if(cmd==='update'){
     const hook=process.env.RENDER_DEPLOY_HOOK;
     if(!hook) return ctx.reply('El servicio de actualización no está configurado.');
     const url=new URL(hook);
     if(url.protocol!=='https:' || url.hostname!=='api.render.com' || !url.pathname.startsWith('/deploy/')) return ctx.reply('Hook no válido.');
+    await ctx.reply('Actualizando bot…');
     const result=await fetch(url,{method:'POST',redirect:'error',signal:AbortSignal.timeout(15000)});
-    return ctx.reply(result.ok?'Actualización solicitada.':'No se pudo solicitar la actualización.');
+    return ctx.reply(result.ok?'Actualización iniciada.':'No se pudo iniciar la actualización.');
   }
-  await ctx.reply('Reinicio solicitado.');
+  await ctx.reply('Reiniciando bot…');
   setTimeout(()=>process.kill(process.pid,'SIGTERM'),500).unref();
 }
