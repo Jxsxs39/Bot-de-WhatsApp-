@@ -15,7 +15,8 @@ export function parseMessage(msg, selfJids = []) {
   if (!chatId || !(/@(g\.us|s\.whatsapp\.net|lid)$/.test(chatId))) return null;
   // En grupos se usa el participante, no el identificador del grupo.
   const isGroup = chatId.endsWith('@g.us');
-  const raw = isGroup ? (key.participantAlt || key.participant) : (key.remoteJidAlt || chatId);
+  const candidates = (isGroup ? [key.participantAlt,key.participant] : [key.remoteJidAlt,chatId]).map(normalizeJid).filter(Boolean);
+  const raw = candidates.find(id=>/^\d+@s\.whatsapp\.net$/.test(id)) || candidates[0];
   if (!raw || !/@(s\.whatsapp\.net|lid)$/.test(raw)) return null;
   const content = normalizeMessageContent(msg.message);
   const text = (
@@ -34,9 +35,9 @@ export function parseMessage(msg, selfJids = []) {
     const authorId = authorIds.map(normalizeJid).find(id => selfIds.has(id));
     // Only the linked account's own commands are handled; its replies cannot loop back.
     if (!match || !authorId) return null;
-    userId = authorId;
+    userId = [...selfIds].find(id=>/^\d+@s\.whatsapp\.net$/.test(id)) || authorId;
   }
-  return { chatId, userId, command: match?.[1].toLowerCase(), args: match?.[2]?.split(/\s+/) || [] };
+  return { chatId, userId, ...(key.fromMe && !isGroup && chatId!==userId ? {selfChat:true}:{}), command: match?.[1].toLowerCase(), args: match?.[2]?.split(/\s+/) || [] };
 }
 // Inyectar socket y base permite probar sin conectarse a WhatsApp.
 export function createCommandHandler(sock, db) {
@@ -59,6 +60,10 @@ export function createCommandHandler(sock, db) {
     };
     let stage='registro SQLite';
     try {
+      // Resuelve LID mediante el mapa autenticado de Baileys, nunca mediante texto del usuario.
+      if(ctx.userId.endsWith('@lid')) {
+        try {const pn=normalizeJid(await sock.signalRepository?.lidMapping?.getPNForLID(ctx.userId));if(pn && /^\d+@s\.whatsapp\.net$/.test(pn)) ctx.userId=pn;} catch {console.log('[IDENTIDAD] LID sin resolver');}
+      }
       // Cuenta mensajes normales también; solo los comandos reciben respuesta.
       await db.registerMessage(ctx.userId);
       if (!ctx.command) return;
