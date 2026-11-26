@@ -136,33 +136,26 @@ test('.pin busca el tema indicado en Pinterest y valida la entrada',async()=>{
    key:{remoteJid:'123@s.whatsapp.net'},
    message:{conversation:'.pin vestidos de verano'}
   });
-  assert.equal(sent.length,4);
-  assert.match(sent[0][1].text,/3 fotos relacionadas/);
-  const resultUrl=new URL(sent[0][1].text.match(/https:\/\/www\.pinterest\.com\/\S+/)[0]);
-  assert.equal(resultUrl.hostname,'www.pinterest.com');
-  assert.equal(resultUrl.pathname,'/search/pins/');
-  assert.equal(resultUrl.searchParams.get('q'),'vestidos de verano');
-  assert.match(sent[1][1].caption,/Artista · CC BY-SA 4.0/);
-  assert.equal(sent[1][1].image.url,'https://thumb.wikimedia.org/image-0.jpg');
-  assert.equal(sent[3][1].image.url,'https://thumb.wikimedia.org/image-2.jpg');
+  assert.equal(sent.length,3);
+  assert.equal(sent[0][1].image.url,'https://thumb.wikimedia.org/image-0.jpg');
+  assert.equal(sent[2][1].image.url,'https://thumb.wikimedia.org/image-2.jpg');
+  assert.ok(sent.every(([,message])=>message.image && !('caption' in message) && !('text' in message)));
 
   await handler.handleMessage({
    key:{remoteJid:'123@s.whatsapp.net'},
    message:{conversation:'.pin contexto sin archivos commons'}
   });
-  assert.equal(sent.length,8);
-  assert.match(sent[4][1].text,/3 fotos relacionadas/);
-  assert.doesNotMatch(sent[4][1].text,/licencia/);
-  assert.equal(sent[5][1].image.url,'https://upload.wikimedia.org/wikipedia/commons/beach.jpg');
-  assert.match(sent[5][1].caption,/Fuente: https:\/\/es\.wikipedia\.org\/wiki\/Playa/);
-  assert.equal(sent[6][1].image.url,'https://ts1.mm.bing.net/th?id=photo-0');
-  assert.equal(sent[7][1].image.url,'https://ts2.mm.bing.net/th?id=photo-1');
+  assert.equal(sent.length,6);
+  assert.equal(sent[3][1].image.url,'https://upload.wikimedia.org/wikipedia/commons/beach.jpg');
+  assert.equal(sent[4][1].image.url,'https://ts1.mm.bing.net/th?id=photo-0');
+  assert.equal(sent[5][1].image.url,'https://ts2.mm.bing.net/th?id=photo-1');
+  assert.ok(sent.every(([,message])=>message.image && !('caption' in message) && !('text' in message)));
 
   await handler.handleMessage({
    key:{remoteJid:'123@s.whatsapp.net'},
    message:{conversation:'.pin'}
   });
-  assert.match(sent[8][1].text,/Uso: \.pin/);
+  assert.match(sent[6][1].text,/Uso: \.pin/);
  }finally{fetchMock.mock.restore();await db.close();}
 });
 test('respuestas conservan código y logs sin decoración',()=>{

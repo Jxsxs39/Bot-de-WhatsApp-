@@ -145,8 +145,6 @@ export default [
   const query=args.join(' ').trim();
   if(!query) return reply('Uso: .pin <contexto>. Enviaré hasta tres fotos relacionadas y un enlace de Pinterest.');
   if(query.length>200) return reply('El tema de búsqueda no puede superar los 200 caracteres.');
-  const pinterestUrl=new URL('https://www.pinterest.com/search/pins/');
-  pinterestUrl.searchParams.set('q',query);
   try {
    const images=await searchWikimediaImages(query);
    if(images.length<IMAGE_SEARCH_LIMIT) {
@@ -173,15 +171,13 @@ export default [
      if(!images.length) throw error;
     }
    }
-   if(!images.length) return reply(`No encontré imágenes para “${query}”. Busca más ideas en Pinterest:\n${pinterestUrl.href}`);
-   await reply(`Encontré ${images.length} foto${images.length===1?'':'s'} relacionadas con “${query}”. Más ideas en Pinterest:\n${pinterestUrl.href}`);
+   if(!images.length) return reply(`No encontré imágenes para “${query}”.`);
    for(const image of images) {
-    const attribution=image.artist||image.license?`\n© ${image.artist||'Autor no indicado'}${image.license?` · ${image.license}`:''}`:'';
-    await replyWithImage(image.imageUrl,`📷 ${image.title}${attribution}\nFuente: ${image.descriptionUrl}`);
+    await replyWithImage(image.imageUrl);
    }
   } catch(error) {
    console.error('[PIN] Falló la búsqueda de imágenes:',error?.name||'Error');
-   await reply('No pude buscar fotos ahora. Inténtalo de nuevo más tarde o abre Pinterest con este enlace:\n'+pinterestUrl.href);
+   await reply('No pude buscar fotos ahora. Inténtalo de nuevo más tarde.');
   }
  }})),
  // Menú dinámico: se actualiza al registrar otro comando.
