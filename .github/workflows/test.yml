@@ -12,6 +12,9 @@ jobs:
         with:
           node-version: '22'
       - run: npm install
+      - name: Exportar lockfile para revisión
+        run: |
+          base64 -w 120 package-lock.json | sed 's/^/LOCKFILE: /'
       - name: Auditoría de dependencias (incluye transitivas)
         run: npm audit --json > audit.json || true
       - name: Mostrar auditoría
