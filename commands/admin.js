@@ -1,7 +1,7 @@
 import {readFile,writeFile,mkdir,rename} from 'node:fs/promises';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {commands,reloadCommands} from './index.js';
+
 import {audit,readAudit} from '../admin-audit.js';
 const run=promisify(execFile);
 const files=new Set(['general.js','economy.js','stickers.js']);
@@ -100,7 +100,11 @@ export async function handleAdmin(ctx) {
     return ctx.reply('Archivo activo actualizado: '+path+'. Usa .reload para cargarlo. Respaldo disponible con .rollback '+target+'.');
   }
   if(cmd==='logs') return ctx.reply(readAudit().join('\n') || 'Sin eventos registrados.');
-  if(cmd==='reload'){await reloadCommands();return ctx.reply('Comandos recargados: '+commands.size);}
+  if(cmd==='reload'){
+    if(typeof ctx.reloadSocket!=='function') return ctx.reply('La recarga del socket no está disponible.');
+    await ctx.reply('Recargando socket…');
+    ctx.reloadSocket();return;
+  }
   if(cmd==='update'){
     const hook=process.env.RENDER_DEPLOY_HOOK;
     if(!hook) return ctx.reply('El servicio de actualización no está configurado.');
