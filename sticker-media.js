@@ -31,9 +31,11 @@ export function getStickerMediaSource(msg) {
   const directType = mediaType(content);
   if (directType) return { type: directType, message: { ...msg, message: content } };
 
+  // FIX: buscar en cualquier parte, no solo en el primer nivel
   const contextInfo = Object.values(content || {})
     .find(part => part && typeof part === 'object' && part.contextInfo?.quotedMessage)
     ?.contextInfo;
+
   if (!contextInfo) return null;
 
   const quotedContent = normalizeMessageContent(contextInfo.quotedMessage);
@@ -46,8 +48,10 @@ export function getStickerMediaSource(msg) {
       ...msg,
       key: {
         ...msg.key,
+        remoteJid: msg.key?.remoteJid,
         id: contextInfo.stanzaId || msg.key?.id,
-        participant: contextInfo.participant
+        participant: contextInfo.participant || msg.key?.participant,
+        fromMe: false
       },
       message: quotedContent
     }
@@ -64,7 +68,7 @@ export async function downloadStickerMedia(source, sock) {
   for await (const chunk of stream) {
     total += chunk.length;
     if (total > MAX_MEDIA_BYTES) {
-      stream.destroy();
+      try { stream.destroy(); } catch {}
       throw new StickerMediaError(
         'MEDIA_TOO_LARGE',
         'Input media exceeded the processing limit',
@@ -83,7 +87,6 @@ function run(program, args) {
     let stdout = '';
     let stderr = '';
     let settled = false;
-    let timer;
     const finish = (callback, value) => {
       if (settled) return;
       settled = true;
@@ -110,26 +113,38 @@ function run(program, args) {
       }
       const error = new StickerMediaError(
         'CONVERSION_FAILED',
-        `${program} exited with code ${code}`,
+        `${program} exited with code ${code}: ${stderr}`,
         'No pude convertir el archivo. Prueba con una foto o un video MP4 más corto.'
       );
       error.details = stderr;
       finish(reject, error);
     });
-    timer = setTimeout(() => {
-      child.kill();
+    // FIX: timer declarado antes de usarlo y kill con SIGKILL
+    const timer = setTimeout(() => {
+      try { child.kill('SIGKILL'); } catch {}
       finish(reject, new StickerMediaError(
         'PROCESS_TIMEOUT',
         `${program} exceeded the processing time limit`,
         'La conversión tardó demasiado. Prueba con un archivo más corto.'
       ));
     }, 30_000);
+    timer.unref?.();
   });
+}
+
+// FIX: detectar extensión real por magic bytes
+function detectExt(buffer, type) {
+  if (buffer[0] === 0xFF && buffer[1] === 0xD8) return '.jpg';
+  if (buffer[0] === 0x89 && buffer[1] === 0x50) return '.png';
+  if (buffer.toString('ascii', 8, 12) === 'WEBP') return '.webp';
+  if (buffer.toString('ascii', 4, 8) === 'ftyp') return '.mp4';
+  return type === 'video' ? '.mp4' : '.jpg';
 }
 
 export async function createStickerMedia(buffer, type, includeAudio = false) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'whatsapp-sticker-'));
-  const inputPath = path.join(directory, 'input');
+  const ext = detectExt(buffer, type);
+  const inputPath = path.join(directory, `input${ext}`);
   const stickerPath = path.join(directory, 'sticker.webp');
   const audioPath = path.join(directory, 'audio.ogg');
   const ffmpeg = process.env.FFMPEG_PATH || 'ffmpeg';
@@ -137,14 +152,20 @@ export async function createStickerMedia(buffer, type, includeAudio = false) {
     await writeFile(inputPath, buffer);
     let hasAudio = false;
     if (type === 'video' && includeAudio) {
-      const probe = await run(process.env.FFPROBE_PATH || 'ffprobe', [
-        '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_type',
-        '-of', 'csv=p=0', inputPath
-      ]);
-      hasAudio = Boolean(probe.stdout.trim());
+      // FIX: si no hay audio, ffprobe no debe tumbar el sticker
+      try {
+        const probe = await run(process.env.FFPROBE_PATH || 'ffprobe', [
+          '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_type',
+          '-of', 'csv=p=0', inputPath
+        ]);
+        hasAudio = Boolean(probe.stdout.trim());
+      } catch {
+        hasAudio = false;
+      }
     }
 
-    const scale = 'scale=512:512:force_original_aspect_ratio=decrease:flags=lanczos,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000,format=yuva420p';
+    // FIX: pad con black@0 y pix_fmt correcto
+    const scale = 'scale=512:512:force_original_aspect_ratio=decrease:flags=lanczos,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0,format=yuva420p';
     const stickerLimit = type === 'video' ? MAX_ANIMATED_STICKER_BYTES : MAX_STATIC_STICKER_BYTES;
     const qualities = type === 'video' ? ['40', '25', '15'] : ['55', '40', '25'];
     let stickerSize = Infinity;
@@ -155,9 +176,10 @@ export async function createStickerMedia(buffer, type, includeAudio = false) {
         ...(type === 'video' ? ['-t', String(MAX_VIDEO_SECONDS)] : ['-frames:v', '1']),
         '-vf', videoFilter, '-an',
         '-c:v', type === 'video' ? 'libwebp_anim' : 'libwebp',
+        '-pix_fmt', 'yuva420p',
         '-quality', quality,
         '-compression_level', '6',
-        ...(type === 'video' ? ['-loop', '0'] : []),
+        ...(type === 'video' ? ['-loop', '0', '-lossless', '0'] : ['-lossless', '0']),
         '-f', 'webp', stickerPath
       ];
       await run(ffmpeg, args);
@@ -185,4 +207,4 @@ export async function createStickerMedia(buffer, type, includeAudio = false) {
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
-}
+} 
