@@ -1,11 +1,11 @@
 // Cada objeto contiene el nombre del comando y la función que ejecuta.
 export default [
  // Saludo y orientación para usuarios nuevos.
- {name:'hola', async run({replyWithImage}) { await replyWithImage('https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=1200&q=85','¡Hola! Soy *Historia Reiss Bot* 👑\nUn paisaje tranquilo para acompañar tu aventura.\nEscribe .menu para ver mis comandos.'); }},
+ {name:'hola', async run({replyWithImage}) { await replyWithImage('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTz-Aiu59NlPmS7N0XXbyubXSZlEx6EgIypqmI70JMH47mc7YMxve845HJYp42YQYV2Mulslsp9GlBlf20SZZS10nqg3iqdJuVbONoMdeMCnA&s=10','¡Hola! Soy *Historia Reiss Bot* 👑\nUn paisaje tranquilo para acompañar tu aventura.\nEscribe .menu para ver mis comandos.'); }},
  // Menú dinámico: se actualiza al registrar otro comando.
  {name:'menu', async run({reply,commands}) { await reply('👑 *Menú principal*\n\n'+[...commands.keys()].map(name=>'• .'+name).join('\n')); }},
  // Texto narrativo editable sin tocar el motor del bot.
- {name:'historia', async run({replyWithImage}) { await replyWithImage('https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&q=85','📖 *Historia Reiss*\n\nEn un pequeño pueblo oculto entre montañas, existía un reloj que no marcaba horas, sino recuerdos olvidados...'); }},
+ {name:'historia', async run({replyWithImage}) { await replyWithImage('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQuJNQnSpOsMvWoDllNutNEUIvxnfcTcKNn2oCi76KyjQ&s=10','📖 *Historia Reiss*\n\nEn un pequeño pueblo oculto entre montañas, existía un reloj que no marcaba horas, sino recuerdos olvidados...'); }},
  // Dato fijo; puede ampliarse a una colección posteriormente.
  {name:'dato', async run({reply}) { await reply('🏛️ *Dato curioso:* La Universidad de Oxford es más antigua que el Imperio Azteca.'); }},
  // Consulta únicamente el perfil de quien envía el mensaje.
