@@ -15,7 +15,7 @@ async function owners(){
   catch(e){if(e.code==='ENOENT') return [];throw e;}
 }
 function privateSender(ctx){
-  return !ctx.chatId.endsWith('@g.us') && (!ctx.rawMessage?.key?.fromMe || ctx.chatId===ctx.userId) && /^\d+@s\.whatsapp\.net$/.test(ctx.userId);
+  return !ctx.chatId.endsWith('@g.us') && (!ctx.rawMessage?.key?.fromMe || (ctx.chatId===ctx.userId || ctx.selfChat===true)) && /^\d+@s\.whatsapp\.net$/.test(ctx.userId);
 }
 export async function ownerPriority(ctx){
   if(!privateSender(ctx)) return 0;
@@ -27,14 +27,15 @@ export const adminNames=new Set(['getcode','setcode','savefile','test','update',
 // Una sola política controla el menú y la ejecución administrativa.
 const primaryOnly=new Set(['setowner','delowner']);
 export function visibleAdminNames(priority){return [...adminNames].filter(name=>priority>=90 && (priority>=100 || !primaryOnly.has(name)));}
+export function adminMenuLines(){return [...adminNames].map(n=>'• .'+n+' — '+(n==='admin'?'Todos':primaryOnly.has(n)?'Solo owner principal':'Solo owners'));}
 export async function handleAdmin(ctx) {
+  if(ctx.command==='admin') return ctx.reply('👑 *Administración*\n\n'+adminMenuLines().join('\n'));
   const priority=await ownerPriority(ctx);
   if(priority<90) return ctx.reply('Acceso administrativo denegado.');
   if(primaryOnly.has(ctx.command) && priority<100) return ctx.reply('Solo el propietario principal puede ejecutar este comando.');
   const [file,token]=ctx.args;
   const cmd=ctx.command;
   audit('administración: '+cmd);
-  if(cmd==='admin') return ctx.reply('👑 *Administración*\n\n'+visibleAdminNames(priority).map(n=>'• .'+n).join('\n'));
   if(cmd==='owners') return ctx.reply('Principal: '+primary().split('@')[0]+' (100)\n'+(await owners()).map(x=>x.split('@')[0]+' (90)').join('\n'));
   if(cmd==='setowner' || cmd==='delowner'){
     if(ctx.userId!==primary()) return ctx.reply('Solo el propietario principal puede administrar owners.');
