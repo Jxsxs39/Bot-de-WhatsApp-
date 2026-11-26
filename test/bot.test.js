@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, {mock} from 'node:test';
 import assert from 'node:assert/strict';
 import {parseMessage,createCommandHandler} from '../handler.js';
 import {styleBotReply} from '../bot-style.js';
@@ -91,6 +91,50 @@ test('.code envía la solicitud al servicio de subbots',async()=>{
   assert.match(sent[0][1].text,/Código de subbot/);
  }finally{await db.close();}
 });
+test('.pin busca el tema indicado en Pinterest y valida la entrada',async()=>{
+ const db=await new Database(':memory:').init();
+ const pages={};
+ for(let index=0;index<4;index++) pages[String(index)]={
+  index,
+  title:`File:foto-${index}.jpg`,
+  imageinfo:[{
+   thumburl:`https://thumb.wikimedia.org/image-${index}.jpg`,
+   descriptionurl:`https://commons.wikimedia.org/wiki/File:foto-${index}.jpg`,
+   extmetadata:{
+    ObjectName:{value:`Foto ${index}`},
+    Artist:{value:'<a href="https://commons.wikimedia.org/wiki/User:Artist">Artista</a>'},
+    LicenseShortName:{value:'CC BY-SA 4.0'}
+   }
+  }]
+ };
+ const fetchMock=mock.method(globalThis,'fetch',async url=>{
+  assert.equal(new URL(url).searchParams.get('gsrsearch'),'vestidos de verano');
+  return {ok:true,json:async()=>({query:{pages}})};
+ });
+ try {
+  const sent=[];
+  const handler=createCommandHandler({sendMessage:async(...args)=>{sent.push(args);return {key:{remoteJid:args[0],id:`sent-${sent.length}`}};}},db);
+  await handler.handleMessage({
+   key:{remoteJid:'123@s.whatsapp.net'},
+   message:{conversation:'.pin vestidos de verano'}
+  });
+  assert.equal(sent.length,4);
+  assert.match(sent[0][1].text,/3 fotos relacionadas/);
+  const resultUrl=new URL(sent[0][1].text.match(/https:\/\/www\.pinterest\.com\/\S+/)[0]);
+  assert.equal(resultUrl.hostname,'www.pinterest.com');
+  assert.equal(resultUrl.pathname,'/search/pins/');
+  assert.equal(resultUrl.searchParams.get('q'),'vestidos de verano');
+  assert.match(sent[1][1].caption,/Artista · CC BY-SA 4.0/);
+  assert.equal(sent[1][1].image.url,'https://thumb.wikimedia.org/image-0.jpg');
+  assert.equal(sent[3][1].image.url,'https://thumb.wikimedia.org/image-2.jpg');
+
+  await handler.handleMessage({
+   key:{remoteJid:'123@s.whatsapp.net'},
+   message:{conversation:'.pin'}
+  });
+  assert.match(sent[4][1].text,/Uso: \.pin/);
+ }finally{fetchMock.mock.restore();await db.close();}
+});
 test('respuestas conservan código y logs sin decoración',()=>{
  const code='const command = true;';
  const logs='[audit] comando completado';
@@ -115,6 +159,7 @@ test('.menu muestra el banner y .hola ya no está disponible',async()=>{
   assert.match(sent[1][1].caption,/• \.s2/);
   assert.match(sent[1][1].caption,/• \.ping/);
   assert.match(sent[1][1].caption,/• \.tt/);
+  assert.match(sent[1][1].caption,/• \.pin/);
   assert.match(sent[1][1].caption,/• \.chatgpt/);
   assert.doesNotMatch(sent[1][1].caption,/\.hola/);
   assert.match(sent[2][1].text,/Comando no encontrado/);

@@ -1,6 +1,50 @@
 import {styleBotReply} from '../bot-style.js';
 // Cada objeto contiene el nombre del comando y la función que ejecuta.
 const historiaImageUrl = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQuJNQnSpOsMvWoDllNutNEUIvxnfcTcKNn2oCi76KyjQ&s=10';
+const IMAGE_SEARCH_LIMIT=3;
+
+function plainMetadata(value,maxLength=120) {
+ return String(value||'').replace(/<[^>]*>/g,' ').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&')
+  .replace(/&quot;/gi,'"').replace(/&#39;|&#039;/gi,"'").replace(/\s+/g,' ').trim().slice(0,maxLength);
+}
+
+export async function searchWikimediaImages(query,fetchImpl=globalThis.fetch) {
+ const url=new URL('https://commons.wikimedia.org/w/api.php');
+ for(const [key,value] of Object.entries({
+  action:'query',generator:'search',gsrsearch:query,gsrnamespace:'6',gsrlimit:'12',
+  prop:'imageinfo',iiprop:'url|extmetadata',iiurlwidth:'900',format:'json'
+ })) url.searchParams.set(key,value);
+ const response=await fetchImpl(url,{headers:{'user-agent':'HistoriaReissBot/1.0 (WhatsApp image search)'} ,signal:AbortSignal.timeout(12_000)});
+ if(!response.ok) throw new Error(`Wikimedia search returned HTTP ${response.status}`);
+ const data=await response.json();
+ return Object.values(data.query?.pages||{})
+  .sort((a,b)=>(a.index||0)-(b.index||0))
+  .filter(page=>/\.(jpe?g|png|webp)$/i.test(page.title||''))
+  .map(page=>{
+   const info=page.imageinfo?.[0];
+   if(!info) return null;
+   const imageUrl=info.thumburl||info.url;
+   let parsedUrl;
+   try {parsedUrl=new URL(imageUrl);} catch {return null;}
+   if(parsedUrl.protocol!=='https:' || !['thumb.wikimedia.org','upload.wikimedia.org'].includes(parsedUrl.hostname)) return null;
+   const descriptionUrl=info.descriptionurl;
+   let parsedDescription;
+   try {parsedDescription=new URL(descriptionUrl);} catch {return null;}
+   if(parsedDescription.protocol!=='https:' || parsedDescription.hostname!=='commons.wikimedia.org') return null;
+   const metadata=info.extmetadata||{};
+   return {
+    imageUrl:parsedUrl.href,
+    title:plainMetadata(metadata.ObjectName?.value||page.title.replace(/^File:/,'')),
+    artist:plainMetadata(metadata.Artist?.value||metadata.Attribution?.value||'Autor no indicado'),
+    license:plainMetadata(metadata.LicenseShortName?.value||'Licencia libre',40),
+    descriptionUrl:parsedDescription.href
+   };
+  })
+  .filter(Boolean)
+  .filter((image,index,images)=>images.findIndex(item=>item.imageUrl===image.imageUrl)===index)
+  .slice(0,IMAGE_SEARCH_LIMIT);
+}
+
 export default [
  // Diagnóstico en grupos y privados: muestra solo la identidad del remitente autenticado.
  {name:'id', async run({reply,chatId,userId,rawMessage,sock}) {
@@ -31,10 +75,28 @@ export default [
   }
   await reply('Para respetar los permisos del creador, no descargo el video automáticamente. Ábrelo en TikTok y usa Compartir → Guardar video si esa opción está habilitada.');
  }},
+ ...['pin','pinterest'].map(name=>({name,async run({reply,replyWithImage,args}) {
+  const query=args.join(' ').trim();
+  if(!query) return reply('Uso: .pin <contexto>. Enviaré hasta tres fotos relacionadas y un enlace de Pinterest.');
+  if(query.length>200) return reply('El tema de búsqueda no puede superar los 200 caracteres.');
+  const pinterestUrl=new URL('https://www.pinterest.com/search/pins/');
+  pinterestUrl.searchParams.set('q',query);
+  try {
+   const images=await searchWikimediaImages(query);
+   if(!images.length) return reply(`No encontré fotos con licencia libre para “${query}”. Busca más ideas en Pinterest:\n${pinterestUrl.href}`);
+   await reply(`Encontré ${images.length} foto${images.length===1?'':'s'} relacionadas con “${query}”. Las imágenes vienen de Wikimedia Commons; más ideas en Pinterest:\n${pinterestUrl.href}`);
+   for(const image of images) {
+    await replyWithImage(image.imageUrl,`📷 ${image.title}\n© ${image.artist} · ${image.license}\nFuente: ${image.descriptionUrl}`);
+   }
+  } catch(error) {
+   console.error('[PIN] Falló la búsqueda de imágenes:',error?.name||'Error');
+   await reply('No pude buscar fotos ahora. Inténtalo de nuevo más tarde o abre Pinterest con este enlace:\n'+pinterestUrl.href);
+  }
+ }})),
  // Menú dinámico: se actualiza al registrar otro comando.
  {name:'menu', async run(ctx) {
   const {replyWithImage,commands}=ctx;
-  const sections=[['General',['ping','p','menu','id','historia','dato','perfil','stats','chatgpt']],['Economía',['work','daily']],['Stickers',['sticker','s','stiker']]];
+  const sections=[['General',['ping','p','menu','id','historia','dato','perfil','stats','chatgpt','pin']],['Economía',['work','daily']],['Stickers',['sticker','s','stiker']]];
   const known=new Set(sections.flatMap(([,names])=>names));
   sections.push(['Otros',[...commands.keys()].filter(n=>!known.has(n))]);
   const blocks=sections.map(([title,names])=>[title,names.filter(n=>commands.has(n))]);
