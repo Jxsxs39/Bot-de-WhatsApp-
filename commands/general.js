@@ -1,3 +1,4 @@
+import {styleBotReply} from '../bot-style.js';
 // Cada objeto contiene el nombre del comando y la función que ejecuta.
 const historiaImageUrl = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQuJNQnSpOsMvWoDllNutNEUIvxnfcTcKNn2oCi76KyjQ&s=10';
 export default [
@@ -12,11 +13,12 @@ export default [
   await reply('Tu identidad de WhatsApp\nNúmero JID: '+(pn||'No disponible')+'\nLID: '+(lid||'No disponible'));
  }},
  // Ping público: mide el tiempo real de envío de una respuesta a WhatsApp.
- ...['ping','p'].map(name=>({name,async run({reply}){
+ ...['ping','p'].map(name=>({name,async run({reply,sock,chatId}){
   const start=performance.now();
-  await reply('🏓 ¡Pong! El bot está activo.');
+  const sent=await reply('🏓 ¡Pong!\nEstado: Activo\nLatencia: midiendo…');
   const elapsed=performance.now()-start;
-  await reply('Tiempo real de envío: '+elapsed.toFixed(2)+' ms');
+  if(!sent?.key) throw new Error('No se recibió la clave del mensaje');
+  await sock.sendMessage(chatId,{text:styleBotReply('🏓 ¡Pong!\nEstado: Activo\nLatencia: '+elapsed.toFixed(2)+' ms','ping'),edit:sent.key});
  }})),
  {name:'tt', async run({reply,args}) {
   const link=args.join(' ').trim();
