@@ -2,6 +2,7 @@ import {audit} from './admin-audit.js';
 import {adminNames,handleAdmin} from './commands/admin.js';
 import { commands } from './commands/index.js';
 import { normalizeMessageContent } from '@whiskeysockets/baileys';
+import { styleBotReply } from './bot-style.js';
 
 function normalizeJid(jid) {
   return typeof jid === 'string' ? jid.replace(/:\d+@/, '@') : undefined;
@@ -49,12 +50,15 @@ export function createCommandHandler(sock, db) {
       return;
     }
     const reply = async text => {
-      const result = await sock.sendMessage(ctx.chatId, { text });
+      const result = await sock.sendMessage(ctx.chatId, { text: styleBotReply(text, ctx.command) });
       console.log('[RESPUESTA] Enviada al chat');
       return result;
     };
     const replyWithImage = async (url, caption) => {
-      const result = await sock.sendMessage(ctx.chatId, { image: { url }, caption });
+      const result = await sock.sendMessage(ctx.chatId, {
+        image: { url },
+        caption: styleBotReply(caption, ctx.command)
+      });
       console.log('[RESPUESTA] Imagen enviada al chat');
       return result;
     };
