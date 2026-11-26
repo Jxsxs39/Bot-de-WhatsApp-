@@ -5,19 +5,22 @@ import {randomBytes} from 'node:crypto';
 const run=promisify(execFile);
 const files=new Set(['general.js','economy.js','stickers.js']);
 const pending=new Map();
-// El propietario principal se configura en Render y no puede eliminarse por chat.
-const primary=()=>process.env.BOT_PRIMARY_OWNER?.replace(/^\+/,'').replace(/\s|-/g,'')+'@s.whatsapp.net';
+// El propietario principal fijo tiene prioridad 100 y no puede eliminarse por chat.
+const primary=()=> '584149164536@s.whatsapp.net';
 const ownerFile=()=>process.env.BOT_OWNERS_FILE || 'data/owners.json';
 async function owners(){
   try {const list=JSON.parse(await readFile(ownerFile(),'utf8'));if(!Array.isArray(list)) throw new Error('Formato de owners inválido');return list;}
   catch(e){if(e.code==='ENOENT') return [];throw e;}
 }
 function privateSender(ctx){
-  return !ctx.rawMessage?.key?.fromMe && !ctx.chatId.endsWith('@g.us') && /^\d+@s\.whatsapp\.net$/.test(ctx.userId);
+  return !ctx.chatId.endsWith('@g.us') && (!ctx.rawMessage?.key?.fromMe || ctx.chatId===ctx.userId) && /^\d+@s\.whatsapp\.net$/.test(ctx.userId);
 }
-export async function isAdmin(ctx){
-  return privateSender(ctx) && (ctx.userId===primary() || (await owners()).includes(ctx.userId));
+export async function ownerPriority(ctx){
+  if(!privateSender(ctx)) return 0;
+  if(ctx.userId===primary()) return 100;
+  return (await owners()).includes(ctx.userId) ? 90 : 0;
 }
+export async function isAdmin(ctx){return (await ownerPriority(ctx))>=90;}
 export const adminNames=new Set(['getcode','setcode','savefile','test','update','restart','reload','logs','setowner','delowner']);
 export async function handleAdmin(ctx) {
   if(!await isAdmin(ctx)) return ctx.reply('Acceso administrativo denegado.');

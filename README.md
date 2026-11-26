@@ -43,3 +43,6 @@ Configura WHATSAPP_PHONE con tu número internacional sin + en Environment. Usa 
 
 ## Administración experimental
 Configura BOT_OWNER_JIDS con JIDs autorizados separados por comas (número internacional@s.whatsapp.net o LID exacto). Usa otra cuenta autorizada en chat privado con el bot. El prefijo actual es `.`. `.getcode archivo.js`, `.savefile archivo.js` o `.setcode archivo.js` citando código, `.test archivo.js` (solo sintaxis), `.update` (hook privado RENDER_DEPLOY_HOOK), `.restart` (confirmación). Los borradores no se ejecutan ni se publican; Render gratuito puede perderlos. No guardes secretos en GitHub.
+
+### Prioridad administrativa
+El owner principal fijo tiene prioridad 100 y no puede ser eliminado. Los owners delegados tienen prioridad 90; solo el principal puede usar `.setowner` y `.delowner`. Los comandos sensibles se limitan a chats privados; desde la cuenta vinculada, usa el chat contigo mismo. BOT_OWNERS_FILE permite ubicar la lista en almacenamiento persistente. Render gratuito puede perder la lista local.
