@@ -121,7 +121,7 @@ test('.calc evalúa operaciones de forma segura',async()=>{
  try {
   const sent=[];
   const handler=createCommandHandler({sendMessage:async(...args)=>sent.push(args)},db);
-  for(const expression of ['(12 + 8) / 4','2^3^2','-2^2','1,5 * 2','10 / 0','2 +']) {
+  for(const expression of ['(12 + 8) / 4','2^3^2','-2^2','1,5 * 2','30%30000','10 / 0','2 +']) {
    await handler.handleMessage({
     key:{remoteJid:'123@s.whatsapp.net'},
     message:{conversation:`.calc ${expression}`}
@@ -131,8 +131,9 @@ test('.calc evalúa operaciones de forma segura',async()=>{
   assert.match(sent[1][1].text,/Resultado: 512/);
   assert.match(sent[2][1].text,/Resultado: -4/);
   assert.match(sent[3][1].text,/Resultado: 3/);
-  assert.match(sent[4][1].text,/No se puede dividir entre cero/);
-  assert.match(sent[5][1].text,/Operación no válida/);
+  assert.match(sent[4][1].text,/Resultado: 9000/);
+  assert.match(sent[5][1].text,/No se puede dividir entre cero/);
+  assert.match(sent[6][1].text,/Operación no válida/);
  }finally{await db.close();}
 });
 test('.pin busca el tema indicado en Pinterest y valida la entrada',async()=>{

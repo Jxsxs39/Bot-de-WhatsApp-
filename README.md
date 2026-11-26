@@ -32,7 +32,7 @@ También se aceptan comandos con prefijo `.` enviados desde la cuenta vinculada;
 
 `.ping` confirma que el bot está activo. `.tt <enlace>` valida enlaces de TikTok y recuerda usar la descarga oficial si el creador la habilitó; no descarga contenido automáticamente.
 
-`.calc <operación>` resuelve sumas, restas, multiplicaciones, divisiones, módulo y potencias; acepta paréntesis y decimales con punto o coma. Ejemplos: `.calc (12 + 8) / 4`, `.calc 2^8`.
+`.calc <operación>` resuelve sumas, restas, multiplicaciones, divisiones, porcentajes y potencias; acepta paréntesis y decimales con punto o coma. Para calcular un porcentaje de una cantidad, escribe, por ejemplo, `.calc 30%30000` (resultado: 9000).
 
 `.pin <contexto>` busca hasta tres fotos relacionadas en Wikimedia Commons y complementa los resultados con Wikipedia y Bing Imágenes cuando hace falta. Envía las imágenes sin texto ni pies de foto. También se acepta `.pinterest <contexto>`.
 
