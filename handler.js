@@ -71,7 +71,7 @@ export function createCommandHandler(sock, db) {
       // Cuenta mensajes normales también; solo los comandos reciben respuesta.
       await db.registerMessage(ctx.userId);
       if (!ctx.command) return;
-      if(adminNames.has(ctx.command)) { stage='autorización administrativa'; return await handleAdmin({...ctx,reply,rawMessage:msg}); }
+      if(adminNames.has(ctx.command)) { stage='autorización administrativa'; return await handleAdmin({...ctx,reply,rawMessage:msg,sock}); }
       stage='búsqueda de comando';
       const cmd = commands.get(ctx.command);
       console.log('[COMANDO]', cmd ? ctx.command : 'desconocido');
