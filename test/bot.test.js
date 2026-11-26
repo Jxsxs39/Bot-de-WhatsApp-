@@ -15,6 +15,10 @@ test('identidad de grupo y mensajes normales',()=>{
  const ownCommand={...msg,key:{...msg.key,fromMe:true},message:{conversation:'.ping'}};
  assert.equal(parseMessage(ownCommand,['456:2@s.whatsapp.net']).userId,'456@s.whatsapp.net');
  assert.equal(parseMessage(ownCommand,['789@s.whatsapp.net']),null);
+ const ownPrivateMessage={key:{remoteJid:'456@s.whatsapp.net',fromMe:true},message:{conversation:'hola'}};
+ assert.equal(parseMessage(ownPrivateMessage,['456:2@s.whatsapp.net']).userId,'456@s.whatsapp.net');
+ assert.equal(parseMessage(ownPrivateMessage,['456@s.whatsapp.net']).command,undefined);
+ assert.equal(parseMessage({...ownPrivateMessage,key:{remoteJid:'123@s.whatsapp.net',fromMe:true}},['456@s.whatsapp.net']),null);
 });
 test('premios concurrentes y usuarios independientes',async()=>{
  const db=await new Database(':memory:').init();
@@ -49,6 +53,27 @@ test('comandos propios de la cuenta vinculada sí reciben respuesta',async()=>{
   assert.match(sent[0][1].text,/Pong/);
   assert.equal(sent[1][1].edit.id,'sent-1');
   assert.equal((await db.getStats('456@s.whatsapp.net')).messages,1);
+ }finally{await db.close();}
+});
+test('comandos desde el chat privado del bot funcionan sin responder a sus propios textos',async()=>{
+ const db=await new Database(':memory:').init();
+ try {
+  const sent=[];
+  const handler=createCommandHandler({user:{id:'456:2@s.whatsapp.net'},sendMessage:async(...args)=>{
+   sent.push(args);
+   return {key:{remoteJid:args[0],id:`sent-${sent.length}`}};
+  }},db);
+  await handler.handleMessage({
+   key:{remoteJid:'456@s.whatsapp.net',fromMe:true},
+   message:{conversation:'.ping'}
+  });
+  assert.equal(sent.length,2);
+  assert.match(sent[0][1].text,/Pong/);
+  await handler.handleMessage({
+   key:{remoteJid:'456@s.whatsapp.net',fromMe:true},
+   message:{conversation:'🏓 ¡Pong!'}
+  });
+  assert.equal(sent.length,2);
  }finally{await db.close();}
 });
 test('.ping confirma actividad y .tt guía a la descarga oficial',async()=>{

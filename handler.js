@@ -36,8 +36,8 @@ export function parseMessage(msg, selfJids = []) {
     const selfIds = new Set(selfJids.map(normalizeJid).filter(Boolean));
     const authorIds = isGroup ? [key.participantAlt, key.participant] : [key.remoteJidAlt, chatId];
     const authorId = authorIds.map(normalizeJid).find(id => selfIds.has(id));
-    // Only the linked account's own commands are handled; its replies cannot loop back.
-    if (!match || !authorId) return null;
+    // Own private-chat messages are safe to inspect; only prefixed commands get replies.
+    if (!authorId || (isGroup && !match)) return null;
     userId = [...selfIds].find(id=>/^\d+@s\.whatsapp\.net$/.test(id)) || authorId;
   }
   return { chatId, userId, ...(key.fromMe && !isGroup && chatId!==userId ? {selfChat:true}:{}), command: match?.[1].toLowerCase(), args: match?.[2]?.split(/\s+/) || [] };
