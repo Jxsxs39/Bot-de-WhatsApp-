@@ -107,16 +107,27 @@ test('.pin busca el tema indicado en Pinterest y valida la entrada',async()=>{
    }
   }]
  };
+ const bingResults=['playa resultado uno','playa resultado dos'].map((title,index)=>{
+  const metadata=JSON.stringify({
+   t:title,
+   turl:`https://ts${index+1}.mm.bing.net/th?id=photo-${index}`,
+   purl:`https://example.com/photo-${index}`
+  }).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+  return `<a class="iusc" m="${metadata}"></a>`;
+ }).join('');
  const fetchMock=mock.method(globalThis,'fetch',async url=>{
   const parsedUrl=new URL(url);
   if(parsedUrl.hostname==='commons.wikimedia.org') {
    assert.equal(parsedUrl.searchParams.get('gsrlimit'),'50');
    return {ok:true,json:async()=>({query:{pages:parsedUrl.searchParams.get('gsrsearch')==='vestidos de verano'?pages:{}}})};
   }
-  assert.equal(parsedUrl.hostname,'es.wikipedia.org');
-  return {ok:true,json:async()=>({query:{pages:{
-   1:{index:1,title:'Playa',fullurl:'https://es.wikipedia.org/wiki/Playa',thumbnail:{source:'https://upload.wikimedia.org/wikipedia/commons/beach.jpg'}}
-  }}})};
+  if(parsedUrl.hostname==='es.wikipedia.org') {
+   return {ok:true,json:async()=>({query:{pages:{
+    1:{index:1,title:'Playa',fullurl:'https://es.wikipedia.org/wiki/Playa',thumbnail:{source:'https://upload.wikimedia.org/wikipedia/commons/beach.jpg'}}
+   }}})};
+  }
+  assert.equal(parsedUrl.hostname,'www.bing.com');
+  return {ok:true,text:async()=>bingResults};
  });
  try {
   const sent=[];
@@ -139,17 +150,19 @@ test('.pin busca el tema indicado en Pinterest y valida la entrada',async()=>{
    key:{remoteJid:'123@s.whatsapp.net'},
    message:{conversation:'.pin contexto sin archivos commons'}
   });
-  assert.equal(sent.length,6);
-  assert.match(sent[4][1].text,/1 foto relacionada/);
+  assert.equal(sent.length,8);
+  assert.match(sent[4][1].text,/3 fotos relacionadas/);
   assert.doesNotMatch(sent[4][1].text,/licencia/);
   assert.equal(sent[5][1].image.url,'https://upload.wikimedia.org/wikipedia/commons/beach.jpg');
   assert.match(sent[5][1].caption,/Fuente: https:\/\/es\.wikipedia\.org\/wiki\/Playa/);
+  assert.equal(sent[6][1].image.url,'https://ts1.mm.bing.net/th?id=photo-0');
+  assert.equal(sent[7][1].image.url,'https://ts2.mm.bing.net/th?id=photo-1');
 
   await handler.handleMessage({
    key:{remoteJid:'123@s.whatsapp.net'},
    message:{conversation:'.pin'}
   });
-  assert.match(sent[6][1].text,/Uso: \.pin/);
+  assert.match(sent[8][1].text,/Uso: \.pin/);
  }finally{fetchMock.mock.restore();await db.close();}
 });
 test('respuestas conservan código y logs sin decoración',()=>{

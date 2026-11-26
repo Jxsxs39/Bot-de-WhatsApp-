@@ -78,6 +78,39 @@ async function searchWikipediaImages(query,fetchImpl=globalThis.fetch) {
   .slice(0,IMAGE_SEARCH_LIMIT);
 }
 
+async function searchBingImages(query,fetchImpl=globalThis.fetch) {
+ const url=new URL('https://www.bing.com/images/search');
+ url.searchParams.set('q',query);
+ url.searchParams.set('form','HDRSC3');
+ const response=await fetchImpl(url,{headers:{'user-agent':'Mozilla/5.0 (compatible; HistoriaReissBot/1.0)'},signal:AbortSignal.timeout(12_000)});
+ if(!response.ok) throw new Error(`Bing image search returned HTTP ${response.status}`);
+ const html=await response.text();
+ const images=[];
+ for(const match of html.matchAll(/\bm="([^"]+)"/g)) {
+  let metadata;
+  try {
+   metadata=JSON.parse(match[1].replace(/&quot;/g,'"').replace(/&amp;/g,'&'));
+  } catch {continue;}
+  let imageUrl;
+  let descriptionUrl;
+  try {
+   imageUrl=new URL(metadata.turl);
+   descriptionUrl=new URL(metadata.purl);
+  } catch {continue;}
+  if(imageUrl.protocol!=='https:' || !/^ts(?:e)?\d+\.mm\.bing\.net$/i.test(imageUrl.hostname)) continue;
+  if(descriptionUrl.protocol!=='https:') continue;
+  images.push({
+   imageUrl:imageUrl.href,
+   title:plainMetadata(metadata.t||query),
+   artist:'',
+   license:'',
+   descriptionUrl:descriptionUrl.href
+  });
+  if(images.length===IMAGE_SEARCH_LIMIT) break;
+ }
+ return images.filter((image,index,all)=>all.findIndex(item=>item.imageUrl===image.imageUrl)===index);
+}
+
 export default [
  // Diagnóstico en grupos y privados: muestra solo la identidad del remitente autenticado.
  {name:'id', async run({reply,chatId,userId,rawMessage,sock}) {
@@ -125,6 +158,18 @@ export default [
      }
     } catch(error) {
      console.error('[PIN] Falló la búsqueda complementaria de Wikipedia:',error?.name||'Error');
+     if(!images.length) throw error;
+    }
+   }
+   if(images.length<IMAGE_SEARCH_LIMIT) {
+    try {
+     const additionalImages=await searchBingImages(query);
+     for(const image of additionalImages) {
+      if(!images.some(existing=>existing.imageUrl===image.imageUrl)) images.push(image);
+      if(images.length===IMAGE_SEARCH_LIMIT) break;
+     }
+    } catch(error) {
+     console.error('[PIN] Falló la búsqueda complementaria de Bing:',error?.name||'Error');
      if(!images.length) throw error;
     }
    }

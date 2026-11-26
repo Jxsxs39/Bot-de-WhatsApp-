@@ -32,7 +32,7 @@ También se aceptan comandos con prefijo `.` enviados desde la cuenta vinculada;
 
 `.ping` confirma que el bot está activo. `.tt <enlace>` valida enlaces de TikTok y recuerda usar la descarga oficial si el creador la habilitó; no descarga contenido automáticamente.
 
-`.pin <contexto>` busca hasta tres fotos relacionadas en Wikimedia Commons y, si hacen falta, complementa los resultados con imágenes de Wikipedia. No exige una licencia específica; cada foto incluye su fuente y, cuando está disponible, la atribución. También se acepta `.pinterest <contexto>`.
+`.pin <contexto>` busca hasta tres fotos relacionadas en Wikimedia Commons y complementa los resultados con Wikipedia y Bing Imágenes cuando hace falta. No exige una licencia específica; cada foto incluye su fuente y, cuando está disponible, la atribución. También se acepta `.pinterest <contexto>`.
 
 `.chatgpt <pregunta>` consulta la API de OpenAI y responde con una personalidad cálida inspirada en Historia Reiss. Configura `OPENAI_API_KEY` en las variables del hosting; opcionalmente, `OPENAI_MODEL` cambia el modelo (por defecto `gpt-4o-mini`). El texto después del comando se envía a OpenAI y el uso de la API puede tener costo. Cada consulta es independiente y admite hasta 4.000 caracteres.
 
