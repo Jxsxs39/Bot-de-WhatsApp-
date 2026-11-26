@@ -3,6 +3,74 @@ import {styleBotReply} from '../bot-style.js';
 const historiaImageUrl = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQuJNQnSpOsMvWoDllNutNEUIvxnfcTcKNn2oCi76KyjQ&s=10';
 const IMAGE_SEARCH_LIMIT=3;
 
+function evaluateExpression(expression) {
+ const input=expression.trim();
+ if(!input) throw new Error('Escribe una operación, por ejemplo: .calc (12 + 8) / 4');
+ if(input.length>120) throw new Error('La operación no puede superar los 120 caracteres.');
+ const tokens=[];
+ const tokenPattern=/\s*(?:(\d+(?:[.,]\d*)?|[.,]\d+)|([()+\-*/%^×÷]))/gy;
+ let offset=0;
+ while(offset<input.length) {
+  tokenPattern.lastIndex=offset;
+  const match=tokenPattern.exec(input);
+  if(!match) throw new Error('Operación no válida. Usa números, paréntesis y +, -, *, /, %, ^.');
+  offset=tokenPattern.lastIndex;
+  if(match[1]) tokens.push({type:'number',value:Number(match[1].replace(',','.'))});
+  else tokens.push({type:'operator',value:match[2]==='×'?'*':match[2]==='÷'?'/':match[2]});
+ }
+
+ let position=0;
+ const peek=()=>tokens[position];
+ const take=()=>tokens[position++];
+ const checked=value=>{
+  if(!Number.isFinite(value)) throw new Error('El resultado no es un número finito.');
+  return value;
+ };
+ const parsePrimary=()=>{
+  const token=take();
+  if(token?.type==='number') return checked(token.value);
+  if(token?.value==='(') {
+   const value=parseExpression();
+   if(take()?.value!==')') throw new Error('Falta cerrar un paréntesis.');
+   return value;
+  }
+  throw new Error('Operación no válida. Revisa los números y paréntesis.');
+ };
+ const parsePower=()=>{
+  const base=parsePrimary();
+  if(peek()?.value!=='^') return base;
+  take();
+  return checked(base**parseUnary());
+ };
+ const parseUnary=()=>{
+  if(peek()?.value==='+') {take();return parseUnary();}
+  if(peek()?.value==='-') {take();return checked(-parseUnary());}
+  return parsePower();
+ };
+ const parseTerm=()=>{
+  let value=parseUnary();
+  while(['*','/','%'].includes(peek()?.value)) {
+   const operator=take().value;
+   const right=parseUnary();
+   if((operator==='/'||operator==='%')&&right===0) throw new Error('No se puede dividir entre cero.');
+   value=checked(operator==='*'?value*right:operator==='/'?value/right:value%right);
+  }
+  return value;
+ };
+ const parseExpression=()=>{
+  let value=parseTerm();
+  while(['+','-'].includes(peek()?.value)) {
+   const operator=take().value;
+   const right=parseTerm();
+   value=checked(operator==='+'?value+right:value-right);
+  }
+  return value;
+ };
+ const result=parseExpression();
+ if(position!==tokens.length) throw new Error('Operación no válida. Revisa los operadores y paréntesis.');
+ return Object.is(result,-0)?0:result;
+}
+
 function plainMetadata(value,maxLength=120) {
  return String(value||'').replace(/<[^>]*>/g,' ').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&')
   .replace(/&quot;/gi,'"').replace(/&#39;|&#039;/gi,"'").replace(/\s+/g,' ').trim().slice(0,maxLength);
@@ -183,7 +251,7 @@ export default [
  // Menú dinámico: se actualiza al registrar otro comando.
  {name:'menu', async run(ctx) {
   const {replyWithImage,commands}=ctx;
-  const sections=[['General',['ping','p','menu','id','historia','dato','perfil','stats','chatgpt','pin']],['Economía',['work','daily']],['Stickers',['sticker','s','stiker']]];
+  const sections=[['General',['ping','p','menu','id','historia','dato','perfil','stats','calc','chatgpt','pin']],['Economía',['work','daily']],['Stickers',['sticker','s','stiker']]];
   const known=new Set(sections.flatMap(([,names])=>names));
   sections.push(['Otros',[...commands.keys()].filter(n=>!known.has(n))]);
   const blocks=sections.map(([title,names])=>[title,names.filter(n=>commands.has(n))]);
@@ -195,6 +263,15 @@ export default [
  {name:'historia', async run({replyWithImage}) { await replyWithImage(historiaImageUrl,'📖 *Historia Reiss*\n\nEn un pequeño pueblo oculto entre montañas, existía un reloj que no marcaba horas, sino recuerdos olvidados...'); }},
  // Dato fijo; puede ampliarse a una colección posteriormente.
  {name:'dato', async run({reply}) { await reply('🏛️ *Dato curioso:* La Universidad de Oxford es más antigua que el Imperio Azteca.'); }},
+ {name:'calc', async run({reply,args}) {
+  try {
+   const result=evaluateExpression(args.join(' '));
+   const formatted=Number.isInteger(result)?String(result):String(Number(result.toPrecision(12)));
+   await reply(`🧮 Resultado: ${formatted}`);
+  } catch(error) {
+   await reply(`🧮 ${error.message}`);
+  }
+ }},
  // Consulta únicamente el perfil de quien envía el mensaje.
  {name:'perfil', async run({reply,db,userId}) { const u=await db.getStats(userId); await reply('👤 *Tu perfil*\n• Coins: '+u.coins+'\n• Nivel: '+u.level+'\n• XP: '+u.xp); }},
  // Muestra estadísticas personales sin publicar identificadores privados.
