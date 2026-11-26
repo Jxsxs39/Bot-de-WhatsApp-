@@ -30,7 +30,7 @@ jobs:
       - name: Comprobar API real de eventos de Baileys
         run: |
           node --input-type=module <<'JS'
-          import { makeEventBuffer } from '@whiskeysockets/baileys';
+          import { makeEventBuffer } from '@rexxhayanasi/elaina-baileys';
           import pino from 'pino';
           import assert from 'node:assert/strict';
           const ev = makeEventBuffer(pino({level:'silent'}));

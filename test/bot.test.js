@@ -37,13 +37,17 @@ test('comandos propios de la cuenta vinculada sí reciben respuesta',async()=>{
  const db=await new Database(':memory:').init();
  try {
   const sent=[];
-  const handler=createCommandHandler({user:{id:'456:2@s.whatsapp.net'},sendMessage:async(...args)=>sent.push(args)},db);
+  const handler=createCommandHandler({user:{id:'456:2@s.whatsapp.net'},sendMessage:async(...args)=>{
+   sent.push(args);
+   return {key:{remoteJid:args[0],id:`sent-${sent.length}`}};
+  }},db);
   await handler.handleMessage({
    key:{remoteJid:'123@g.us',participant:'456:2@s.whatsapp.net',fromMe:true},
    message:{conversation:'.ping'}
   });
-  assert.equal(sent.length,1);
+  assert.equal(sent.length,2);
   assert.match(sent[0][1].text,/Pong/);
+  assert.equal(sent[1][1].edit.id,'sent-1');
   assert.equal((await db.getStats('456@s.whatsapp.net')).messages,1);
  }finally{await db.close();}
 });
@@ -51,7 +55,10 @@ test('.ping confirma actividad y .tt guía a la descarga oficial',async()=>{
  const db=await new Database(':memory:').init();
  try {
   const sent=[];
-  const handler=createCommandHandler({sendMessage:async(...args)=>sent.push(args)},db);
+  const handler=createCommandHandler({sendMessage:async(...args)=>{
+   sent.push(args);
+   return {key:{remoteJid:args[0],id:`sent-${sent.length}`}};
+  }},db);
   await handler.handleMessage({
    key:{remoteJid:'123@s.whatsapp.net'},
    message:{conversation:'.ping'}
@@ -60,11 +67,28 @@ test('.ping confirma actividad y .tt guía a la descarga oficial',async()=>{
    key:{remoteJid:'123@s.whatsapp.net'},
    message:{conversation:'.tt https://www.tiktok.com/@creator/video/123'}
   });
-  assert.equal(sent.length,2);
+  assert.equal(sent.length,3);
   assert.match(sent[0][1].text,/Pong/);
+  assert.equal(sent[1][1].edit.id,'sent-1');
   assert.match(sent[0][1].text,/\*Historia Reiss\* 🏓/);
   assert.match(sent[0][1].text,/_Con cariño, Historia_/);
-  assert.match(sent[1][1].text,/no descargo el video automáticamente/);
+  assert.match(sent[2][1].text,/no descargo el video automáticamente/);
+ }finally{await db.close();}
+});
+test('.code envía la solicitud al servicio de subbots',async()=>{
+ const db=await new Database(':memory:').init();
+ try {
+  const sent=[];
+  let requester;
+  const subbots={requestPairingCode:async ctx=>{requester=ctx.userId;await ctx.reply('Código de subbot');}};
+  const handler=createCommandHandler({sendMessage:async(...args)=>sent.push(args)},db,undefined,subbots);
+  await handler.handleMessage({
+   key:{remoteJid:'123@s.whatsapp.net'},
+   message:{conversation:'.code'}
+  });
+  assert.equal(requester,'123@s.whatsapp.net');
+  assert.equal(sent.length,1);
+  assert.match(sent[0][1].text,/Código de subbot/);
  }finally{await db.close();}
 });
 test('respuestas conservan código y logs sin decoración',()=>{

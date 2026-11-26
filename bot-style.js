@@ -12,6 +12,7 @@ const commandEmojis = {
   s1: '🎞️',
   s2: '🖼️',
   admin: '👑',
+  code: '🔑',
   getcode: '💻',
   setcode: '🛠️',
   savefile: '💾',

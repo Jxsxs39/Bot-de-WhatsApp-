@@ -43,7 +43,7 @@ export function parseMessage(msg, selfJids = []) {
   return { chatId, userId, ...(key.fromMe && !isGroup && chatId!==userId ? {selfChat:true}:{}), command: match?.[1].toLowerCase(), args: match?.[2]?.split(/\s+/) || [] };
 }
 // Inyectar socket y base permite probar sin conectarse a WhatsApp.
-export function createCommandHandler(sock, db, reloadSocket) {
+export function createCommandHandler(sock, db, reloadSocket, subbots) {
   return { async handleMessage(msg) {
     const ctx = parseMessage(msg, [sock.user?.id, sock.user?.lid, sock.user?.phoneNumber]);
     // Diagnóstico sin mostrar números, contenido de mensajes ni credenciales.
@@ -87,7 +87,7 @@ export function createCommandHandler(sock, db, reloadSocket) {
           ...ctx, db, reply, replyWithAudioSticker, sock, rawMessage: msg
         });
       }
-      if(adminNames.has(ctx.command)) { stage='autorización administrativa'; return await handleAdmin({...ctx,reply,rawMessage:msg,sock,reloadSocket}); }
+      if(adminNames.has(ctx.command)) { stage='autorización administrativa'; return await handleAdmin({...ctx,reply,rawMessage:msg,sock,reloadSocket,subbots}); }
       stage='búsqueda de comando';
       const cmd = commands.get(ctx.command);
       console.log('[COMANDO]', cmd ? ctx.command : 'desconocido');
@@ -95,7 +95,7 @@ export function createCommandHandler(sock, db, reloadSocket) {
       stage='ejecución o envío';
       await cmd.run({
         ...ctx, db, reply, replyWithImage, replyWithSticker, replyWithAudioSticker,
-        commands, sock, rawMessage: msg
+        commands, sock, rawMessage: msg, subbots
       });
       audit('comando completado: '+ctx.command);
       console.log('[COMANDO] Finalizado');
