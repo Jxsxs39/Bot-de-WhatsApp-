@@ -1,5 +1,5 @@
 import makeWASocket, {useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion} from '@whiskeysockets/baileys';
-import {createServer} from 'node:http';
+import {startHealthServer} from './health.js';
 import pino from 'pino';
 import {createInterface} from 'node:readline/promises';
 import Database from './database.js';
@@ -12,14 +12,7 @@ const db=new Database();
 let socket, retry, pairingTimer, stopping=false, attempts=0, queue=Promise.resolve(), rl;
 // Render y otros servidores sin terminal pueden proporcionar el número por variable de entorno.
 // Render Web Service exige un puerto HTTP. No expone datos ni credenciales del bot.
-let healthServer;
-if (process.env.PORT) {
-  healthServer=createServer((req,res)=>{
-    res.writeHead(req.url==='/' || req.url==='/health' ? 200 : 404, {'Content-Type':'text/plain'});
-    res.end(req.url==='/' || req.url==='/health' ? 'Historia Reiss: proceso activo' : 'Not found');
-  });
-  healthServer.listen(Number(process.env.PORT),'0.0.0.0');
-}
+const healthServer=process.env.PORT ? startHealthServer(process.env.PORT) : undefined;
 let phone=process.env.WHATSAPP_PHONE?.replace(/\D/g,'');
 // Crea el socket y recupera la sesión existente; no pide otro código si ya está registrada.
 async function connect() {
