@@ -46,3 +46,6 @@ Configura BOT_OWNER_JIDS con JIDs autorizados separados por comas (número inter
 
 ### Prioridad administrativa
 El owner principal fijo tiene prioridad 100 y no puede ser eliminado. Los owners delegados tienen prioridad 90; solo el principal puede usar `.setowner` y `.delowner`. Los comandos sensibles se limitan a chats privados; desde la cuenta vinculada, usa el chat contigo mismo. BOT_OWNERS_FILE permite ubicar la lista en almacenamiento persistente. Render gratuito puede perder la lista local.
+
+### Edición directa de comandos
+El owner principal puede responder a código JavaScript completo con `.setcode general.js` o `.savefile general.js`. Se valida sintaxis, se conserva un respaldo y se reemplaza el archivo activo. `.reload` carga el cambio; `.rollback general.js` restaura el respaldo y después se usa `.reload`. `.test general.js` sobre código citado solo valida sintaxis. Archivos permitidos: general.js, economy.js, stickers.js. Los cambios locales no se sincronizan con GitHub y pueden perderse en Render gratuito. La validación sintáctica no garantiza comportamiento correcto.
