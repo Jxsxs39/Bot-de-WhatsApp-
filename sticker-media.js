@@ -259,19 +259,26 @@ export async function createStickerMedia(buffer, type, includeAudio = false, pro
     let hasAudio = false;
     let inputDuration = null;
     if (type === 'video') {
-      const durationProbe = await processRunner(process.env.FFPROBE_PATH || 'ffprobe', [
-        '-v', 'error', '-show_entries', 'format=duration',
-        '-of', 'default=noprint_wrappers=1:nokey=1', inputPath
-      ]);
-      const measuredDuration = Number(durationProbe.stdout.trim());
-      if (Number.isFinite(measuredDuration) && measuredDuration > 0) inputDuration = measuredDuration;
-    }
-    if (type === 'video' && includeAudio) {
-      const probe = await processRunner(process.env.FFPROBE_PATH || 'ffprobe', [
-        '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_type',
-        '-of', 'csv=p=0', inputPath
-      ]);
-      hasAudio = Boolean(probe.stdout.trim());
+      const durationProbe = await processRunner(process.env.FFPROBE_PATH || 'ffprobe', includeAudio
+        ? ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type', '-of', 'json', inputPath]
+        : [
+            '-v', 'error', '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1', inputPath
+          ]);
+      if (includeAudio) {
+        let metadata;
+        try {
+          metadata = JSON.parse(durationProbe.stdout);
+        } catch {
+          throw new StickerMediaError('INVALID_VIDEO', 'Video metadata is invalid', 'No pude leer la duración del video.');
+        }
+        const measuredDuration = Number(metadata.format?.duration);
+        if (Number.isFinite(measuredDuration) && measuredDuration > 0) inputDuration = measuredDuration;
+        hasAudio = metadata.streams?.some(stream => stream.codec_type === 'audio') || false;
+      } else {
+        const measuredDuration = Number(durationProbe.stdout.trim());
+        if (Number.isFinite(measuredDuration) && measuredDuration > 0) inputDuration = measuredDuration;
+      }
     }
 
     const scale = 'scale=512:512:force_original_aspect_ratio=decrease:flags=lanczos,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0,format=yuva420p';
@@ -285,7 +292,8 @@ export async function createStickerMedia(buffer, type, includeAudio = false, pro
     const durations = type === 'video'
       ? [...new Set(durationFallbacks.map(duration => inputDuration ? Math.min(duration, inputDuration) : duration))]
       : [null];
-    for (const [durationIndex, duration] of durations.entries()) {
+    for (let durationIndex = 0; durationIndex < durations.length; durationIndex++) {
+      const duration = durations[durationIndex];
       videoDuration = duration;
       let retryShorter = false;
       for (const quality of qualities) {
@@ -302,7 +310,7 @@ export async function createStickerMedia(buffer, type, includeAudio = false, pro
           '-c:v', type === 'video' ? 'libwebp_anim' : 'libwebp',
           '-pix_fmt', 'yuva420p',
           '-quality', quality,
-          '-compression_level', '4',
+          '-compression_level', type === 'video' ? '2' : '4',
           ...(type === 'video' ? ['-loop', '0', '-lossless', '0'] : ['-lossless', '0']),
           '-f', 'webp', stickerPath
         ];
@@ -317,6 +325,17 @@ export async function createStickerMedia(buffer, type, includeAudio = false, pro
         }
         stickerSize = (await stat(stickerPath)).size;
         if (stickerSize <= stickerLimit) break;
+        if (type === 'video' && quality === qualities[0] && duration > 1) {
+          const estimatedDuration = Math.max(
+            1,
+            Math.min(duration - 1, Math.floor(duration * stickerLimit / stickerSize * 0.9))
+          );
+          if (!durations.slice(durationIndex + 1).includes(estimatedDuration)) {
+            durations.splice(durationIndex + 1, 0, estimatedDuration);
+          }
+          retryShorter = true;
+          break;
+        }
       }
       if (stickerSize <= stickerLimit) break;
       if (retryShorter) continue;
