@@ -1,38 +1,36 @@
 # 👑 Historia Reiss Bot
 
-> Bot de WhatsApp inspirado en Historia Reiss - Attack on Titan.
-> **Estado:** 🚧 En proceso / En desarrollo 🚧
+Bot de WhatsApp inspirado en Attack on Titan. En desarrollo.
 
-![Bot](https://img.shields.io/badge/Bot-WhatsApp-25D366?style=for-the-badge&logo=whatsapp)
-![Estado](https://img.shields.io/badge/Estado-En_Proceso-yellow?style=for-the-badge)
-![Hecho con](https://img.shields.io/badge/Hecho_con-Node.js-green?style=for-the-badge&logo=node.js)
-
----
-
-## ✨ ¿Qué es Historia Reiss?
-
-Es un bot de WhatsApp con temática de **Attack on Titan**, con la personalidad de Historia Reiss.
-Tiene economía, juegos, diversión y comandos para grupos.
-
-## 🚀 Características
-
-- 💰 Sistema de economía
-- 🎮 Juegos y minijuegos
-- 👑 Comandos de administración
-- 🖼️ Stickers y diversión
-- 📈 Sistema de niveles
-- ⚔️ Temática Attack on Titan
-
-> ⚠️ **El bot todavía está en proceso, muchas funciones están en desarrollo.**
-
-## 📦 Instalación
-
-### En Termux
+## Cómo arrancar desde cero
+Instala Git y Node.js 22 LTS. En Termux: `pkg install nodejs-lts git` (si no está disponible, usa nodejs compatible). Comprueba con `node -v` y `npm -v`.
 
 ```bash
-pkg update && pkg upgrade -y
-pkg install nodejs git -y
-git clone https://github.com/Jxsxs39/Bot-de-WhatsApp-.git
-cd Bot-de-WhatsApp-
+git clone -b test https://github.com/Jxsxs39/Bot-de-WhatsApp-.git historia-test
+cd historia-test
 npm install
+npm test
 npm start
+```
+
+En el primer inicio escribe tu número internacional sin +. En WhatsApp abre Dispositivos vinculados y elige vincular con número de teléfono. Introduce el código mostrado en tu terminal. No compartas ese código. Para detener el bot pulsa Ctrl+C. Para volver a arrancar usa npm start; no necesitas vincular cada vez.
+
+Si sqlite3 necesita compilarse en Termux, instala python, make y clang. Si falla, conserva el mensaje de error para diagnosticarlo.
+
+## Archivos
+- index.js: arranca WhatsApp, recibe eventos y controla reconexiones.
+- handler.js: interpreta el prefijo +, separa chat y usuario, ejecuta comandos.
+- database.js: guarda monedas, XP y estadísticas en SQLite.
+- commands/: comandos separados por función.
+- package.json: dependencias y scripts. package-lock.json fija las versiones; se debe subir una vez regenerado con npm install.
+- .gitignore: evita publicar archivos privados o generados.
+
+## Comandos
++hola, +menu, +historia, +dato, +perfil, +stats, +work, +daily.
+Work tiene espera de 5 minutos y daily de 24 horas. Los juegos, stickers y administración todavía no están implementados.
+
+## Seguridad
+Desvincula inmediatamente la sesión que se publicó anteriormente desde WhatsApp. Crea una nueva. Borrar archivos de una rama no borra el historial Git ni las copias existentes. No reutilices las credenciales publicadas. No subas node_modules, sesiones, bases de datos ni .env. Antes de actualizar, respalda tus datos localmente y no uses la misma sesión en dos procesos. Las estadísticas antiguas guardadas por grupo no se pueden repartir automáticamente entre participantes.
+
+## Cómo agregar un comando
+Lee docs/APRENDER.md. Trabaja en test, ejecuta npm test y prueba en un grupo propio antes de integrar a main.
