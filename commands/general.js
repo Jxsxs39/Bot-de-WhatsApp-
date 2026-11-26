@@ -52,8 +52,8 @@ function evaluateExpression(expression) {
   while(['*','/','%'].includes(peek()?.value)) {
    const operator=take().value;
    const right=parseUnary();
-   if((operator==='/'||operator==='%')&&right===0) throw new Error('No se puede dividir entre cero.');
-   value=checked(operator==='*'?value*right:operator==='/'?value/right:value%right);
+   if(operator==='/'&&right===0) throw new Error('No se puede dividir entre cero.');
+   value=checked(operator==='*'?value*right:operator==='/'?value/right:(value/100)*right);
   }
   return value;
  };
