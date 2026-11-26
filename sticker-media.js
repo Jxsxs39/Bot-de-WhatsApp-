@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { downloadMediaMessage, normalizeMessageContent } from '@whiskeysockets/baileys';
+import { downloadMediaMessage, normalizeMessageContent } from '@rexxhayanasi/elaina-baileys';
 import pino from 'pino';
 
 const MAX_MEDIA_BYTES = 16 * 1024 * 1024;
@@ -10,6 +10,7 @@ const MAX_STATIC_STICKER_BYTES = 100 * 1024;
 const MAX_ANIMATED_STICKER_BYTES = 500 * 1024;
 const MAX_VIDEO_SECONDS = 5;
 const VIDEO_DURATION_FALLBACKS = [MAX_VIDEO_SECONDS, 3, 1];
+const AUDIO_STICKER_VIDEO_DURATION_FALLBACKS = [25, 10, 5, 3, 1];
 const mediaLogger = pino({ level: 'silent' });
 
 export class StickerMediaError extends Error {
@@ -27,16 +28,31 @@ function mediaType(content) {
   return null;
 }
 
+function quotedContentInfo(content) {
+  return Object.values(content || {})
+    .find(part => part && typeof part === 'object' && part.contextInfo?.quotedMessage)
+    ?.contextInfo;
+}
+
+function sourceFromQuotedMessage(msg, quotedContent) {
+  return {
+    key: {
+      ...msg.key,
+      remoteJid: msg.key?.remoteJid,
+      id: quotedContent.stanzaId || msg.key?.id,
+      participant: quotedContent.participant || msg.key?.participant,
+      fromMe: false
+    },
+    message: quotedContent.message
+  };
+}
+
 export function getStickerMediaSource(msg) {
   const content = normalizeMessageContent(msg?.message);
   const directType = mediaType(content);
   if (directType) return { type: directType, message: { ...msg, message: content } };
 
-  // FIX: buscar en cualquier parte, no solo en el primer nivel
-  const contextInfo = Object.values(content || {})
-    .find(part => part && typeof part === 'object' && part.contextInfo?.quotedMessage)
-    ?.contextInfo;
-
+  const contextInfo = quotedContentInfo(content);
   if (!contextInfo) return null;
 
   const quotedContent = normalizeMessageContent(contextInfo.quotedMessage);
@@ -45,17 +61,34 @@ export function getStickerMediaSource(msg) {
 
   return {
     type: quotedType,
-    message: {
-      ...msg,
-      key: {
-        ...msg.key,
-        remoteJid: msg.key?.remoteJid,
-        id: contextInfo.stanzaId || msg.key?.id,
-        participant: contextInfo.participant || msg.key?.participant,
-        fromMe: false
-      },
-      message: quotedContent
-    }
+    message: sourceFromQuotedMessage(msg, {
+      message: quotedContent,
+      stanzaId: contextInfo.stanzaId,
+      participant: contextInfo.participant
+    })
+  };
+}
+
+export function getAudioMediaSource(msg) {
+  const content = normalizeMessageContent(msg?.message);
+  if (content?.audioMessage) {
+    return {
+      mimetype: content.audioMessage.mimetype || 'audio/mpeg',
+      message: { ...msg, message: content }
+    };
+  }
+
+  const contextInfo = quotedContentInfo(content);
+  if (!contextInfo) return null;
+  const quotedContent = normalizeMessageContent(contextInfo.quotedMessage);
+  if (!quotedContent?.audioMessage) return null;
+  return {
+    mimetype: quotedContent.audioMessage.mimetype || 'audio/mpeg',
+    message: sourceFromQuotedMessage(msg, {
+      message: quotedContent,
+      stanzaId: contextInfo.stanzaId,
+      participant: contextInfo.participant
+    })
   };
 }
 
@@ -80,6 +113,53 @@ export async function downloadStickerMedia(source, sock) {
   }
   if (!total) throw new StickerMediaError('EMPTY_MEDIA', 'Downloaded media was empty', 'No pude descargar ese archivo.');
   return Buffer.concat(chunks, total);
+}
+
+export async function convertAudioStickerAudio(buffer, mimeType = '', processRunner = run) {
+  if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+    throw new StickerMediaError('EMPTY_MEDIA', 'Downloaded audio was empty', 'No pude descargar ese audio.');
+  }
+  if (buffer.length > MAX_MEDIA_BYTES) {
+    throw new StickerMediaError('MEDIA_TOO_LARGE', 'Audio exceeded the processing limit', 'El audio supera el límite de 16 MB.');
+  }
+
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'whatsapp-audio-sticker-'));
+  const normalizedMime = mimeType.toLowerCase();
+  const extension = /ogg|opus/.test(normalizedMime) ? '.ogg'
+    : /wav/.test(normalizedMime) ? '.wav'
+      : /mp4|m4a|aac/.test(normalizedMime) ? '.m4a' : '.mp3';
+  const inputPath = path.join(directory, `input${extension}`);
+  const outputPath = path.join(directory, 'audio.ogg');
+  const ffmpeg = process.env.FFMPEG_PATH || 'ffmpeg';
+  const ffprobe = process.env.FFPROBE_PATH || 'ffprobe';
+
+  try {
+    await writeFile(inputPath, buffer);
+    await processRunner(ffmpeg, [
+      '-hide_banner', '-loglevel', 'error', '-y',
+      '-i', inputPath, '-vn', '-map', '0:a:0', '-t', '25',
+      '-c:a', 'libopus', '-b:a', '48k', '-ac', '1', '-ar', '48000', '-f', 'ogg', outputPath
+    ]);
+    const audio = await readFile(outputPath);
+    const probe = await processRunner(ffprobe, [
+      '-v', 'error', '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1', outputPath
+    ]);
+    const duration = Number(probe.stdout.trim());
+    if (!Number.isFinite(duration) || duration <= 0) {
+      throw new StickerMediaError('INVALID_AUDIO', 'Converted audio has no measurable duration', 'No pude leer la duración del audio.');
+    }
+    return { audio, duration: Math.min(duration, 25) };
+  } catch (error) {
+    if (error instanceof StickerMediaError) throw error;
+    throw new StickerMediaError(
+      'AUDIO_CONVERSION_FAILED',
+      error.message,
+      'No pude convertir el audio. Prueba con un archivo de audio compatible.'
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 }
 
 function run(program, args) {
@@ -151,6 +231,15 @@ export async function createStickerMedia(buffer, type, includeAudio = false, pro
   try {
     await writeFile(inputPath, buffer);
     let hasAudio = false;
+    let inputDuration = null;
+    if (type === 'video') {
+      const durationProbe = await processRunner(process.env.FFPROBE_PATH || 'ffprobe', [
+        '-v', 'error', '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1', inputPath
+      ]);
+      const measuredDuration = Number(durationProbe.stdout.trim());
+      if (Number.isFinite(measuredDuration) && measuredDuration > 0) inputDuration = measuredDuration;
+    }
     if (type === 'video' && includeAudio) {
       const probe = await processRunner(process.env.FFPROBE_PATH || 'ffprobe', [
         '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_type',
@@ -164,7 +253,12 @@ export async function createStickerMedia(buffer, type, includeAudio = false, pro
     const qualities = type === 'video' ? ['40', '25', '15'] : ['55', '40', '25'];
     let stickerSize = Infinity;
     let videoDuration = null;
-    const durations = type === 'video' ? VIDEO_DURATION_FALLBACKS : [null];
+    const durationFallbacks = includeAudio
+      ? AUDIO_STICKER_VIDEO_DURATION_FALLBACKS
+      : VIDEO_DURATION_FALLBACKS;
+    const durations = type === 'video'
+      ? [...new Set(durationFallbacks.map(duration => inputDuration ? Math.min(duration, inputDuration) : duration))]
+      : [null];
     for (const [durationIndex, duration] of durations.entries()) {
       videoDuration = duration;
       let retryShorter = false;

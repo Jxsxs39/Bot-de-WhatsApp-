@@ -4,9 +4,17 @@ import { spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { proto } from '@rexxhayanasi/elaina-baileys';
 import Database from '../database.js';
 import { createCommandHandler } from '../handler.js';
-import { createStickerMedia, getStickerMediaSource, StickerMediaError } from '../sticker-media.js';
+import {
+  convertAudioStickerAudio,
+  createStickerMedia,
+  getAudioMediaSource,
+  getStickerMediaSource,
+  StickerMediaError
+} from '../sticker-media.js';
+import { sendAudioSticker } from '../audio-sticker.js';
 
 test('sticker source can be direct media or a quoted photo/video', () => {
   const direct = {
@@ -45,6 +53,20 @@ test('sticker source can be direct media or a quoted photo/video', () => {
   });
   assert.equal(quotedVideo.type, 'video');
   assert.equal(quotedVideo.message.key.id, 'quoted-video');
+  const quotedAudio = getAudioMediaSource({
+    ...quoted,
+    message: {
+      extendedTextMessage: {
+        text: '.s1',
+        contextInfo: {
+          stanzaId: 'quoted-audio',
+          quotedMessage: { audioMessage: { mimetype: 'audio/ogg; codecs=opus' } }
+        }
+      }
+    }
+  });
+  assert.equal(quotedAudio.mimetype, 'audio/ogg; codecs=opus');
+  assert.equal(quotedAudio.message.key.id, 'quoted-audio');
   assert.equal(getStickerMediaSource({ message: { conversation: '.s2' } }), null);
 });
 
@@ -73,11 +95,12 @@ test('video conversion retries with a shorter clip after timing out', async () =
   const stickerDurations = [];
   let audioDuration;
   const processRunner = async (_program, args) => {
-    if (args.includes('-show_entries')) return { stdout: 'audio', stderr: '' };
+    if (args.includes('format=duration')) return { stdout: '30', stderr: '' };
+    if (args.includes('stream=codec_type')) return { stdout: 'audio', stderr: '' };
     if (args.includes('-c:v')) {
       const duration = Number(args[args.indexOf('-t') + 1]);
       stickerDurations.push(duration);
-      if (duration === 5) throw new StickerMediaError('PROCESS_TIMEOUT', 'timed out');
+      if (duration === 25) throw new StickerMediaError('PROCESS_TIMEOUT', 'timed out');
       await writeFile(args[args.length - 1], Buffer.from('fake-webp'));
       return { stdout: '', stderr: '' };
     }
@@ -90,10 +113,29 @@ test('video conversion retries with a shorter clip after timing out', async () =
   };
   const result = await createStickerMedia(Buffer.from('0000ftypisom'), 'video', true, processRunner);
 
-  assert.deepEqual(stickerDurations, [5, 3]);
-  assert.equal(audioDuration, 3);
-  assert.equal(result.duration, 3);
+  assert.deepEqual(stickerDurations, [25, 10]);
+  assert.equal(audioDuration, 10);
+  assert.equal(result.duration, 10);
   assert.equal(result.audio.toString(), 'fake-audio');
+});
+
+test('audio sticker conversion caps audio at 25 seconds', async () => {
+  const result = await convertAudioStickerAudio(
+    Buffer.from('audio input'),
+    'audio/mpeg',
+    async (program, args) => {
+      if (args.includes('-show_entries')) return { stdout: '27.5', stderr: '' };
+      if (program.toLowerCase().includes('ffmpeg')) {
+        assert.ok(args.includes('-t'));
+        assert.ok(args.includes('25'));
+        await writeFile(args[args.length - 1], Buffer.from('OggS-audio'));
+        return { stdout: '', stderr: '' };
+      }
+      assert.fail(`Unexpected process args: ${args.join(' ')}`);
+    }
+  );
+  assert.equal(result.audio.toString(), 'OggS-audio');
+  assert.equal(result.duration, 25);
 });
 
 const ffmpeg = process.env.FFMPEG_PATH || 'ffmpeg';
@@ -116,8 +158,8 @@ test('long videos are trimmed to sticker length and produce WebP and audio outpu
     assert.equal(image.status, 0, image.stderr?.toString());
     const video = spawnSync(ffmpeg, [
       '-hide_banner', '-loglevel', 'error', '-y',
-      '-f', 'lavfi', '-i', 'testsrc2=size=64x64:rate=8:duration=8',
-      '-f', 'lavfi', '-i', 'sine=frequency=440:duration=8',
+      '-f', 'lavfi', '-i', 'testsrc2=size=32x32:rate=8:duration=26',
+      '-f', 'lavfi', '-i', 'sine=frequency=440:duration=26',
       '-shortest', '-c:v', 'mpeg4', '-c:a', 'aac', videoPath
     ]);
     assert.equal(video.status, 0, video.stderr?.toString());
@@ -129,7 +171,7 @@ test('long videos are trimmed to sticker length and produce WebP and audio outpu
     assert.equal(videoSticker.sticker.toString('ascii', 0, 4), 'RIFF');
     assert.equal(videoSticker.sticker.toString('ascii', 8, 12), 'WEBP');
     assert.equal(videoSticker.audio.toString('ascii', 0, 4), 'OggS');
-    assert.equal(videoSticker.duration, 5);
+    assert.ok(videoSticker.duration > 0 && videoSticker.duration <= 25);
     await writeFile(audioPath, videoSticker.audio);
     // FFprobe no decodifica WebP animado en todas las versiones. Lee los chunks ANMF del contenedor.
     let frames = 0;
@@ -144,14 +186,29 @@ test('long videos are trimmed to sticker length and produce WebP and audio outpu
       }
       offset += 8 + size + (size % 2);
     }
-    assert.ok(frames > 0 && frames <= 40, `animated sticker had ${frames} frames; expected 1-40`);
-    assert.ok(durationMs <= 5000, `animated sticker lasted ${durationMs} ms; expected at most 5000 ms`);
+    assert.ok(frames > 0 && frames <= videoSticker.duration * 8, `animated sticker had ${frames} frames for ${videoSticker.duration} seconds`);
+    assert.ok(durationMs <= videoSticker.duration * 1000, `animated sticker lasted ${durationMs} ms`);
     const audioDuration = spawnSync(ffprobe, [
       '-v', 'error', '-show_entries', 'format=duration',
       '-of', 'default=noprint_wrappers=1:nokey=1', audioPath
     ], { encoding: 'utf8' });
     assert.equal(audioDuration.status, 0, audioDuration.stderr);
-    assert.ok(Number(audioDuration.stdout.trim()) <= 5.1, 'audio exceeded the 5-second limit');
+    assert.ok(Number(audioDuration.stdout.trim()) <= videoSticker.duration + 0.1, 'audio exceeded the sticker duration');
+
+    const sentMediaTypes = [];
+    let relayedPayload;
+    await sendAudioSticker({
+      waUploadToServer: async (_filePath, { mediaType }) => {
+        sentMediaTypes.push(mediaType);
+        return { mediaUrl: 'https://example.invalid/media', directPath: '/media/audio-sticker' };
+      },
+      relayMessage: async (chatId, payload) => {
+        assert.equal(chatId, '123@s.whatsapp.net');
+        relayedPayload = payload;
+      }
+    }, '123@s.whatsapp.net', videoSticker.sticker, true, videoSticker.audio, videoSticker.duration);
+    assert.deepEqual(sentMediaTypes.sort(), ['audio', 'sticker']);
+    assert.ok(proto.Message.encode(relayedPayload).finish().length > 0);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

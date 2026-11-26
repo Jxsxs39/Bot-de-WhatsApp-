@@ -1,4 +1,4 @@
-import makeWASocket, {useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion} from '@whiskeysockets/baileys';
+import makeWASocket, {useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion} from '@rexxhayanasi/elaina-baileys';
 import {startHealthServer} from './health.js';
 import pino from 'pino';
 import {createInterface} from 'node:readline/promises';
