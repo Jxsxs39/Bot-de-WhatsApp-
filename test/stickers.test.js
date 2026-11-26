@@ -133,12 +133,18 @@ test('long videos are trimmed to sticker length and produce WebP and audio outpu
     assert.equal(videoSticker.duration, 5);
     await writeFile(stickerPath, videoSticker.sticker);
     await writeFile(audioPath, videoSticker.audio);
-    const stickerFrames = spawnSync(ffprobe, [
-      '-v', 'error', '-count_frames', '-select_streams', 'v:0',
-      '-show_entries', 'stream=nb_read_frames', '-of', 'default=noprint_wrappers=1:nokey=1', stickerPath
-    ], { encoding: 'utf8' });
-    assert.equal(stickerFrames.status, 0, stickerFrames.stderr);
-    assert.ok(Number(stickerFrames.stdout.trim()) <= 40, 'animated sticker exceeded 5 seconds at 8 fps');
+    // FFprobe no decodifica WebP animado en todas las versiones. Lee los chunks ANMF del contenedor.
+    let frames=0, durationMs=0;
+    for(let offset=12;offset+8<=videoSticker.sticker.length;){
+      const size=videoSticker.sticker.readUInt32LE(offset+4);
+      assert.ok(offset+8+size<=videoSticker.sticker.length);
+      if(videoSticker.sticker.toString('ascii',offset,offset+4)==='ANMF'){
+        assert.ok(size>=16);frames++;durationMs+=videoSticker.sticker.readUIntLE(offset+20,3);
+      }
+      offset+=8+size+(size%2);
+    }
+    assert.ok(frames>0 && frames<=40, 'animated sticker exceeded 40 frames or has no animation');
+    assert.ok(durationMs<=5000, 'animated sticker exceeded 5 seconds');
     const audioDuration = spawnSync(ffprobe, [
       '-v', 'error', '-show_entries', 'format=duration',
       '-of', 'default=noprint_wrappers=1:nokey=1', audioPath
