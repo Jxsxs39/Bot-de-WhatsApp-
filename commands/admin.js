@@ -43,12 +43,23 @@ export async function handleAdmin(ctx) {
   if(cmd==='owners') return ctx.reply('Principal: '+primary().split('@')[0]+' (100)\n'+(await owners()).map(x=>x.split('@')[0]+' (90)').join('\n'));
   if(cmd==='setowner' || cmd==='delowner'){
     if(!isPrimary(ctx.userId)) return ctx.reply('Solo el propietario principal puede administrar owners.');
+    // Usa las menciones reales de WhatsApp o el autor del mensaje citado.
+    const info=Object.values(ctx.rawMessage?.message || {}).find(x=>x?.contextInfo)?.contextInfo;
+    const mentions=info?.mentionedJid || [];
+    if(mentions.length>1) return ctx.reply('Menciona solo a un usuario.');
     const number=ctx.args.join('').replace(/^\+/,'').replace(/-/g,'');
-    if(!/^\d{8,15}$/.test(number)) return ctx.reply('Indica el número internacional.');
-    const jid=number+'@s.whatsapp.net';
-    if(jid===primary()) return ctx.reply('El propietario principal no se puede modificar.');
+    let jid=mentions[0] || (info?.quotedMessage && info.participant) || (/^\d{8,15}$/.test(number)?number+'@s.whatsapp.net':null);
+    jid=typeof jid==='string'?jid.replace(/:\d+@/,'@'):null;
+    if(!jid || !/^\d+@(s\.whatsapp\.net|lid)$/.test(jid)) return ctx.reply('Menciona a un usuario, responde a su mensaje o indica su número internacional.');
+    const ids=new Set([jid]);
+    try {
+      const map=ctx.sock?.signalRepository?.lidMapping;
+      const other=jid.endsWith('@lid')?await map?.getPNForLID(jid):await map?.getLIDForPN(jid);
+      if(typeof other==='string' && /^\d+@(s\.whatsapp\.net|lid)$/.test(other)) ids.add(other);
+    } catch {}
+    if([...ids].some(isPrimary)) return ctx.reply('El propietario principal no se puede modificar.');
     const list=new Set(await owners());
-    if(cmd==='setowner') list.add(jid); else list.delete(jid);
+    for(const id of ids) {if(cmd==='setowner') list.add(id); else list.delete(id);}
     const path=ownerFile();
     await mkdir((await import('node:path')).dirname(path),{recursive:true,mode:0o700});
     await writeFile(path+'.tmp',JSON.stringify([...list]),{mode:0o600});
