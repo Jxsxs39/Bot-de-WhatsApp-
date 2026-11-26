@@ -11,10 +11,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
-      - run: npm install
-      - name: Exportar lockfile para revisión
-        run: |
-          base64 -w 120 package-lock.json | sed 's/^/LOCKFILE: /'
+      - run: npm ci
       - name: Auditoría de dependencias (incluye transitivas)
         run: npm audit --json > audit.json || true
       - name: Mostrar auditoría
