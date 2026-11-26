@@ -4,7 +4,7 @@
 2. Un socket es la conexión con WhatsApp. Los eventos avisan cuando llegan mensajes o cambia la conexión.
 3. async/await permite esperar operaciones de red y base de datos sin bloquear todo el proceso.
 4. chatId indica dónde responder; userId indica a quién pertenecen las monedas. Nunca uses el ID de un grupo como usuario.
-5. Cada comando exporta un objeto con name y run. Añade su importación al registro de commands/index.js. El menú se genera automáticamente.
+5. Cada comando exporta un objeto con name y run. Añade su importación al registro de commands/index.js. El menú se genera automáticamente; los comandos se ejecutan con prefijo punto, por ejemplo .ping.
 6. Ejemplo: export default { name: 'ping', async run({reply}) { await reply('pong'); } };
 7. SQLite usa parámetros ? para separar datos del SQL. Los premios se aplican en una única actualización condicional para evitar duplicados.
 8. Para actualizar: detén el bot, ejecuta git pull --ff-only, npm install, npm test y npm start. No borres la sesión ni la base de datos para actualizar.

@@ -61,7 +61,7 @@ async function connect() {
   const onConnection=({connection,lastDisconnect,qr})=>{
     if(socket!==sock||stopping) return;
     if(qr && !state.creds.registered) void requestCode();
-    if(connection==='open'){attempts=0;console.log('Historia Reiss conectada. Prefijo +');}
+    if(connection==='open'){attempts=0;console.log('Historia Reiss conectada. Prefijo .');}
     if(connection==='close'){
       cleanup();socket=null;
       const code=lastDisconnect?.error?.output?.statusCode;

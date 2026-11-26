@@ -19,14 +19,14 @@ Si sqlite3 necesita compilarse en Termux, instala python, make y clang. Si falla
 
 ## Archivos
 - index.js: arranca WhatsApp, recibe eventos y controla reconexiones.
-- handler.js: interpreta el prefijo +, separa chat y usuario, ejecuta comandos.
+- handler.js: interpreta el prefijo ., separa chat y usuario, ejecuta comandos.
 - database.js: guarda monedas, XP y estadísticas en SQLite.
 - commands/: comandos separados por función.
 - package.json: dependencias y scripts. package-lock.json fija las versiones verificadas; conserva el archivo en Git y actualízalo junto con package.json.
 - .gitignore: evita publicar archivos privados o generados.
 
 ## Comandos
-+hola, +menu, +historia, +dato, +perfil, +stats, +work, +daily.
+.hola, .menu, .historia, .dato, .perfil, .stats, .work, .daily.
 Work tiene espera de 5 minutos y daily de 24 horas. Los juegos, stickers y administración todavía no están implementados.
 
 ## Seguridad

@@ -11,8 +11,8 @@ export function parseMessage(msg) {
   if (!raw || !/@(s\.whatsapp\.net|lid)$/.test(raw)) return null;
   const userId = raw.replace(/:\d+@/, '@');
   const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').trim();
-  // El prefijo + distingue comandos del texto normal.
-  const match = /^\+(\S+)(?:\s+(.*))?$/s.exec(text);
+  // El prefijo . distingue comandos del texto normal.
+  const match = /^\.(\S+)(?:\s+(.*))?$/s.exec(text);
   return { chatId, userId, command: match?.[1].toLowerCase(), args: match?.[2]?.split(/\s+/) || [] };
 }
 // Inyectar socket y base permite probar sin conectarse a WhatsApp.
@@ -29,6 +29,11 @@ export function createCommandHandler(sock, db) {
       console.log('[RESPUESTA] Enviada al chat');
       return result;
     };
+    const replyWithImage = async (url, caption) => {
+      const result = await sock.sendMessage(ctx.chatId, { image: { url }, caption });
+      console.log('[RESPUESTA] Imagen enviada al chat');
+      return result;
+    };
     let stage='registro SQLite';
     try {
       // Cuenta mensajes normales también; solo los comandos reciben respuesta.
@@ -37,9 +42,9 @@ export function createCommandHandler(sock, db) {
       stage='búsqueda de comando';
       const cmd = commands.get(ctx.command);
       console.log('[COMANDO]', cmd ? ctx.command : 'desconocido');
-      if (!cmd) return await reply('❌ Comando no encontrado. Escribe +menu.');
+      if (!cmd) return await reply('❌ Comando no encontrado. Escribe .menu.');
       stage='ejecución o envío';
-      await cmd.run({ ...ctx, db, reply, commands });
+      await cmd.run({ ...ctx, db, reply, replyWithImage, commands });
       console.log('[COMANDO] Finalizado');
     } catch (error) {
       console.error('[ERROR]',stage,error?.name ?? 'Error',error?.code ?? error?.output?.statusCode ?? 'sin código');
