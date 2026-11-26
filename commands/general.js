@@ -2,13 +2,14 @@
 import {adminMenuLines} from './admin.js';
 const historiaImageUrl = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQuJNQnSpOsMvWoDllNutNEUIvxnfcTcKNn2oCi76KyjQ&s=10';
 export default [
- // Diagnóstico privado: muestra solo la identidad del remitente autenticado.
+ // Diagnóstico en grupos y privados: muestra solo la identidad del remitente autenticado.
  {name:'id', async run({reply,chatId,userId,rawMessage,sock}) {
-  if(chatId.endsWith('@g.us')) return reply('Usa .id en un chat privado.');
-  const ids=[userId,rawMessage?.key?.remoteJidAlt,chatId].filter(x=>typeof x==='string').map(x=>x.replace(/:\d+@/,'@'));
+  const key=rawMessage?.key;
+  const ids=[userId,...(chatId.endsWith('@g.us')?[key?.participantAlt,key?.participant]:[key?.remoteJidAlt,chatId])].filter(x=>typeof x==='string').map(x=>x.replace(/:\d+@/,'@'));
   const pn=ids.find(x=>/^\d+@s\.whatsapp\.net$/.test(x));
   let lid=ids.find(x=>/^\d+@lid$/.test(x));
   if(!lid && pn) try {lid=await sock?.signalRepository?.lidMapping?.getLIDForPN(pn);} catch {}
+  if(lid && !/^\d+@lid$/.test(lid)) lid=undefined;
   await reply('Tu identidad de WhatsApp\nNúmero JID: '+(pn||'No disponible')+'\nLID: '+(lid||'No disponible'));
  }},
  {name:'ping', async run({reply}) { await reply('🏓 ¡Pong! El bot está activo.'); }},
