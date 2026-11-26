@@ -46,8 +46,10 @@ async function connect() {
   // La cola evita escrituras y procesamiento simultáneos fuera de orden.
   const onCreds=()=>{queue=queue.then(saveCreds).catch(()=>console.error('No se pudo guardar la sesión'));};
   const onMessages=({messages,type})=>{
-    if(type!=='notify'||stopping||socket!==sock) return;
-    queue=queue.then(async()=>{for(const msg of messages) await handler.handleMessage(msg);}).catch(()=>console.error('Error procesando mensajes'));
+    // Registra solo metadatos del evento, nunca el texto ni los números.
+    console.log('[EVENTO] messages.upsert:',type,'cantidad:',messages.length);
+    if(type!=='notify'||stopping||socket!==sock) { console.log('[EVENTO] Ignorado por tipo o estado del socket'); return; }
+    queue=queue.then(async()=>{for(const msg of messages) await handler.handleMessage(msg);}).catch(()=>console.error('[ERROR] Cola de mensajes'));
   };
   // Retira los listeners del socket anterior para evitar respuestas duplicadas.
   const cleanup=()=>{
@@ -87,5 +89,5 @@ async function shutdown(){
 }
 process.on('SIGINT',()=>void shutdown());
 process.on('SIGTERM',()=>void shutdown());
-try {await db.init();await connect();}
+try {await db.init();console.log('[SQLite] Base de datos lista');await connect();}
 catch(err){console.error('No se pudo iniciar:',err.message);process.exitCode=1;await shutdown();}
