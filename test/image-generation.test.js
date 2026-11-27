@@ -58,6 +58,40 @@ test('.img expande el nombre de Tralalero Tralala para identificar el personaje'
  assert.match(prompt,/colorful sneakers, no logos/);
 });
 
+test('.img avisa si la generación tarda más de un minuto',async()=>{
+ let clock=0;
+ const expectedImage=Buffer.from('webp image bytes');
+ const replies=[];
+ let delivered;
+ let resolveDelivered;
+ const imageDelivered=new Promise(resolve=>{resolveDelivered=resolve;});
+ const command=createImageGenerationCommand({
+  now:()=>clock,
+  sleep:async milliseconds=>{clock+=milliseconds;},
+  maxWaitMs:70_000,
+  fetchImpl:async url=>{
+   const parsed=new URL(url);
+   if(parsed.pathname.endsWith('/generate/async')) return jsonResponse({id:'slow-job'});
+   if(parsed.pathname.endsWith('/generate/check/slow-job')) {
+    return jsonResponse({done:clock>=65_000});
+   }
+   if(parsed.pathname.endsWith('/generate/status/slow-job')) {
+    return jsonResponse({generations:[{img:expectedImage.toString('base64')}]});
+   }
+   throw new Error('Unexpected API endpoint');
+  }
+ });
+ await command.run({
+  args:['un','paisaje'],
+  userId:'image-user-progress',
+  reply:async text=>replies.push(text),
+  replyWithImage:async image=>{delivered=image;resolveDelivered();}
+ });
+ await imageDelivered;
+ assert.match(replies[1],/sigue en cola \(1 min\)/);
+ assert.equal(delivered.toString(),expectedImage.toString());
+});
+
 test('.img valida descripciones y comunica límite del servicio',async()=>{
  const replies=[];
  const command=createImageGenerationCommand({fetchImpl:async()=>{throw new Error('No debe llamar al API');}});

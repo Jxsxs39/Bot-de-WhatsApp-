@@ -4,6 +4,7 @@ const CLIENT_AGENT='Bot-de-WhatsApp:1.0';
 const PROMPT_LIMIT=500;
 const MAX_WAIT_MS=5*60*1000;
 const POLL_INTERVAL_MS=5000;
+const PROGRESS_INTERVAL_MS=60*1000;
 const USER_COOLDOWN_MS=60*1000;
 const MAX_ACTIVE_GENERATIONS=2;
 const activeUsers=new Set();
@@ -35,7 +36,7 @@ async function apiRequest(path,options={},fetchImpl) {
  return response.json();
 }
 
-export async function generateImage(prompt,{fetchImpl,sleep=delay,now=Date.now,maxWaitMs=MAX_WAIT_MS}={}) {
+export async function generateImage(prompt,{fetchImpl,sleep=delay,now=Date.now,maxWaitMs=MAX_WAIT_MS,onProgress}={}) {
  const submission=await apiRequest('/generate/async',{
   method:'POST',
   headers:{'content-type':'application/json'},
@@ -55,12 +56,21 @@ export async function generateImage(prompt,{fetchImpl,sleep=delay,now=Date.now,m
  }
 
  const requestId=encodeURIComponent(submission.id);
- const deadline=now()+maxWaitMs;
+ const startedAt=now();
+ const deadline=startedAt+maxWaitMs;
+ let nextProgressAt=startedAt+PROGRESS_INTERVAL_MS;
  while(now()<deadline) {
   await sleep(POLL_INTERVAL_MS);
   const check=await apiRequest(`/generate/check/${requestId}`,{},fetchImpl);
   if(check.faulted) throw Object.assign(new Error('GENERATION_FAILED'),{code:'GENERATION_FAILED'});
-  if(!check.done) continue;
+  if(!check.done) {
+   const currentTime=now();
+   if(currentTime>=nextProgressAt) {
+    await onProgress?.(currentTime-startedAt);
+    nextProgressAt=currentTime+PROGRESS_INTERVAL_MS;
+   }
+   continue;
+  }
 
   const result=await apiRequest(`/generate/status/${requestId}`,{},fetchImpl);
   const generation=result.generations?.[0];
@@ -100,13 +110,23 @@ export function createImageGenerationCommand(options={}) {
 
    activeUsers.add(userId);
    try {
-    await reply('🎨 Solicitud enviada a un modelo XL de AI Horde. Puede tardar unos minutos; no envíes información privada porque las solicitudes pueden compartirse.');
+    await reply('🎨 Solicitud enviada a un modelo XL de AI Horde. Puede tardar unos minutos; te avisaré si sigue en cola. No envíes información privada porque las solicitudes pueden compartirse.');
    } catch(error) {
     activeUsers.delete(userId);
     throw error;
    }
 
-   void generateImage(prompt,options)
+   void generateImage(prompt,{
+    ...options,
+    onProgress:async elapsedMs=>{
+     const minutes=Math.floor(elapsedMs/60_000);
+     try {
+      await reply(`⏳ La imagen sigue en cola (${minutes} min). No repitas .img; el bot continúa esperando el resultado.`);
+     } catch(error) {
+      console.error('[IMG] No se pudo enviar el aviso de progreso:',error?.code||error?.name||'Error');
+     }
+    }
+   })
     .then(async image=>{
      try {
       await replyWithImage(image);
