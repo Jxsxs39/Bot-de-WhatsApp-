@@ -285,12 +285,7 @@ export default [
   if(!['admin','superadmin'].includes(sender?.admin)) {
    return reply('Solo los administradores del grupo pueden usar .tag.');
   }
-  const mentions=[...new Set(participants
-   .map(participant=>normalizeJid(participant.id||participant.jid||participant.phoneNumber))
-   .filter(jid=>/@(s\.whatsapp\.net|lid)$/.test(jid||'')))];
-  if(!mentions.length) return reply('No pude obtener los integrantes del grupo para mencionarlos.');
-  const mentionText=mentions.map(jid=>'@'+jid.split('@')[0].replace(/:\d+$/,'')).join(' ');
-  return sock.sendMessage(chatId,{text:`${text}\n\n${mentionText}`,mentions},{quoted:rawMessage});
+  return sock.sendMessage(chatId,{text,mentionAll:true},{quoted:rawMessage});
  }},
  // Consulta únicamente el perfil de quien envía el mensaje.
  {name:'perfil', async run({reply,db,userId}) { const u=await db.getStats(userId); await reply('👤 *Tu perfil*\n• Coins: '+u.coins+'\n• Nivel: '+u.level+'\n• XP: '+u.xp); }},

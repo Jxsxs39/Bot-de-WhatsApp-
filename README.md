@@ -36,7 +36,7 @@ También se aceptan comandos con prefijo `.` enviados desde la cuenta vinculada;
 
 `.pin <contexto>` busca hasta tres fotos relacionadas en Wikimedia Commons y complementa los resultados con Wikipedia y Bing Imágenes cuando hace falta. Envía las imágenes sin texto ni pies de foto. También se acepta `.pinterest <contexto>`.
 
-`.tag <mensaje>` envía el texto y menciona a todos los integrantes del grupo. Solo está disponible para administradores del grupo.
+`.tag <mensaje>` envía solo el texto y usa la mención general nativa de WhatsApp, sin añadir los nombres o números de los integrantes al mensaje. Solo está disponible para administradores del grupo.
 
 `.chatgpt <pregunta>` consulta la API de OpenAI y responde con una personalidad cálida inspirada en Historia Reiss. Configura `OPENAI_API_KEY` en las variables del hosting; opcionalmente, `OPENAI_MODEL` cambia el modelo (por defecto `gpt-4o-mini`). El texto después del comando se envía a OpenAI y el uso de la API puede tener costo. Cada consulta es independiente y admite hasta 4.000 caracteres.
 
