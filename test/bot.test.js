@@ -155,8 +155,9 @@ test('.tag menciona a todos en grupos y limita el uso a administradores',async()
   };
   await handler.handleMessage(rawMessage);
   assert.equal(sent.length,1);
-  assert.equal(sent[0][1].text,'Aviso importante\n\n@123 @456');
-  assert.deepEqual(sent[0][1].mentions,['123@s.whatsapp.net','456@s.whatsapp.net']);
+  assert.equal(sent[0][1].text,'Aviso importante');
+  assert.equal(sent[0][1].mentionAll,true);
+  assert.equal('mentions' in sent[0][1],false);
   assert.equal(sent[0][2].quoted,rawMessage);
 
   participants[0].admin=null;
