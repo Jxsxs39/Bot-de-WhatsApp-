@@ -1,6 +1,7 @@
 import test, {mock} from 'node:test';
 import assert from 'node:assert/strict';
 import {parseMessage,createCommandHandler} from '../handler.js';
+import {commands} from '../commands/index.js';
 import {styleBotReply} from '../bot-style.js';
 import Database from '../database.js';
 test('identidad de grupo y mensajes normales',()=>{
@@ -70,6 +71,33 @@ test('mensaje normal no genera respuesta ni error',async()=>{
  await handler.handleMessage({key:{remoteJid:'123@s.whatsapp.net'},message:{conversation:'hola'}});
  assert.equal(sent.length,0);assert.equal((await db.getStats('123@s.whatsapp.net')).messages,1);
  }finally{await db.close();}
+});
+test('replyWithImage envía Buffer como media y conserva URLs como rutas remotas',async()=>{
+ const db=await new Database(':memory:').init();
+ const image=Buffer.from('webp image bytes');
+ const url='https://images.example.test/photo.png';
+ const commandName='testimagebuffer';
+ const previous=commands.get(commandName);
+ commands.set(commandName,{name:commandName,run:async({replyWithImage})=>{
+  await replyWithImage(image);
+  await replyWithImage(url);
+ }});
+ try {
+  const sent=[];
+  const handler=createCommandHandler({sendMessage:async(...args)=>{sent.push(args);}},db);
+  await handler.handleMessage({
+   key:{remoteJid:'123@s.whatsapp.net'},
+   message:{conversation:`.${commandName}`}
+  });
+  assert.equal(sent.length,2);
+  assert.equal(sent[0][1].image,image);
+  assert.equal(sent[1][1].image.url,url);
+  assert.equal(sent[0][2].quoted.message.conversation,`.${commandName}`);
+ } finally {
+  if(previous) commands.set(commandName,previous);
+  else commands.delete(commandName);
+  await db.close();
+ }
 });
 test('comandos propios de la cuenta vinculada sí reciben respuesta',async()=>{
  const db=await new Database(':memory:').init();
