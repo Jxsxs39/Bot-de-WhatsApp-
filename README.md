@@ -38,7 +38,7 @@ La economía incluye una tienda de títulos cosméticos: consulta `.tienda`, com
 
 `.pin <contexto>` busca hasta tres fotos relacionadas en Wikimedia Commons y complementa los resultados con Wikipedia y Bing Imágenes cuando hace falta. Envía las imágenes sin texto ni pies de foto. También se acepta `.pinterest <contexto>`.
 
-`.img <descripción>` genera una imagen gratis a través de AI Horde, una red comunitaria de equipos voluntarios. Usa modelos XL y puede tardar hasta cinco minutos según la cola; genera una imagen de 768 × 768. Por ejemplo: `.img Tralalero Tralala, un tiburón azul caricaturesco con tres piernas y zapatillas, corriendo por la playa`. Las solicitudes pueden compartirse con el servicio; no incluyas información privada. Hay un límite de una solicitud por usuario cada minuto.
+`.img <descripción>` genera una imagen gratis a través de AI Horde, una red comunitaria de equipos voluntarios. Usa modelos XL, avisa cada minuto mientras espera y puede tardar hasta cinco minutos según la cola; genera una imagen de 768 × 768. Por ejemplo: `.img Tralalero Tralala, un tiburón azul caricaturesco con tres piernas y zapatillas, corriendo por la playa`. Las solicitudes pueden compartirse con el servicio; no incluyas información privada. Hay un límite de una solicitud por usuario cada minuto.
 
 `.tag <mensaje>` envía solo el texto y usa la mención general nativa de WhatsApp, sin añadir los nombres o números de los integrantes al mensaje. Solo está disponible para administradores del grupo.
 
