@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
-import {mkdtemp,rm} from 'node:fs/promises';
+import {access,mkdir,mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {MessageDeduplicator} from '../message-deduplicator.js';
@@ -66,6 +66,58 @@ test('.code solo genera un código en privado y vincula el número del solicitan
   await manager.setCodeEnabled(false);
   assert.equal(manager.getStatus().pending,0);
   assert.match(replies[2],/código de vinculación quedó invalidado/);
+ } finally {
+  await manager.shutdown();
+  await rm(directory,{recursive:true,force:true});
+ }
+});
+
+test('.code distingue credenciales antiguas y permite reiniciar una sesión desconectada',async()=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'subbot-stale-test-'));
+ const authDirectory=path.join(directory,'sessions');
+ const phone='123456789';
+ const sessionDirectory=path.join(authDirectory,phone);
+ await mkdir(sessionDirectory,{recursive:true});
+ let registered=true;
+ let requestedPhone;
+ const sockets=[];
+ const manager=new SubbotManager({
+  authDirectory,
+  settingsFile:path.join(directory,'data','subbots.json'),
+  createCommandHandler:()=>({handleMessage:async()=>{}}),
+  dispatchMessage:async()=>{},
+  loadAuthState:async()=>({state:{creds:{registered}},saveCreds:async()=>{}}),
+  getBaileysVersion:async()=>({version:[2,3000,101]}),
+  makeSocket:()=>{
+   const ev=new EventEmitter();
+   const sock={ev,requestPairingCode:async value=>{requestedPhone=value;return 'ABCD-1234';},end:()=>{}};
+   sockets.push(sock);
+   setImmediate(()=>ev.emit('connection.update',{qr:'qr'}));
+   return sock;
+  },
+  logger:{log(){},error(){}}
+ });
+ try {
+  await manager.start();
+  const replies=[];
+  const ctx={
+   chatId:`${phone}@s.whatsapp.net`,
+   userId:`${phone}@s.whatsapp.net`,
+   sock:{user:{id:'999999999@s.whatsapp.net'}},
+   reply:async text=>replies.push(text)
+  };
+  await manager.requestPairingCode(ctx);
+  assert.match(replies[0],/credenciales de una sesión anterior/);
+  assert.equal(requestedPhone,undefined);
+
+  assert.deepEqual(await manager.resetSession(phone),{ok:true});
+  await assert.rejects(access(sessionDirectory));
+  registered=false;
+  await manager.requestPairingCode(ctx);
+  assert.match(replies[1],/ABCD-1234/);
+  assert.equal(requestedPhone,phone);
+  sockets.at(-1).ev.emit('connection.update',{connection:'open'});
+  assert.deepEqual(await manager.resetSession(phone),{ok:false,reason:'online'});
  } finally {
   await manager.shutdown();
   await rm(directory,{recursive:true,force:true});

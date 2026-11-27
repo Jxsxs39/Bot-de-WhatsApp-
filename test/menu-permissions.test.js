@@ -43,3 +43,21 @@ test('solo los owners pueden pausar y reactivar solicitudes de subbot',async()=>
  assert.equal(enabled,true);
  assert.match(denied,/Acceso administrativo denegado/);
 });
+test('solo un owner puede limpiar credenciales antiguas de un subbot',async()=>{
+ let requestedPhone;
+ const replies=[];
+ const subbots={resetSession:async phone=>{requestedPhone=phone;return {ok:true};}};
+ await handleAdmin({
+  command:'code',args:['reset','123456789'],userId:'584149164536@s.whatsapp.net',
+  subbots,reply:async text=>replies.push(text)
+ });
+ assert.equal(requestedPhone,'123456789');
+ assert.match(replies[0],/Se borró la sesión guardada/);
+
+ await handleAdmin({
+  command:'code',args:['reset','123456789'],userId:'999999999@s.whatsapp.net',
+  subbots,reply:async text=>replies.push(text)
+ });
+ assert.equal(requestedPhone,'123456789');
+ assert.match(replies[1],/Acceso administrativo denegado/);
+});

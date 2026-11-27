@@ -6,6 +6,7 @@ import makeWASocket, {
   useMultiFileAuthState
 } from '@rexxhayanasi/elaina-baileys';
 import pino from 'pino';
+import { clearWhatsAppAuthState } from './whatsapp-session.js';
 
 const PHONE_PATTERN = /^\d{8,15}$/;
 const PAIRING_TIMEOUT_MS = 3 * 60 * 1000;
@@ -129,14 +130,19 @@ export class SubbotManager {
     if (phone === mainPhone) return ctx.reply('La cuenta principal ya está vinculada como bot.');
 
     const existing = this.connections.get(phone);
-    if (existing?.registered) return ctx.reply('Tu cuenta ya está conectada como subbot.');
-    if (existing || this.connecting.has(phone) || this.reconnectTimers.has(phone)) {
+    if (existing?.registered && existing.online) return ctx.reply('Tu cuenta ya está conectada como subbot.');
+    if ((existing?.registered && !existing.online) || this.reconnectTimers.has(phone)) {
+      return ctx.reply(`Hay credenciales de una sesión anterior para tu número, pero no está conectada. Pide al owner que ejecute .code reset ${phone}; después vuelve a solicitar .code.`);
+    }
+    if (existing || this.connecting.has(phone)) {
       return ctx.reply('Ya hay una solicitud de vinculación activa para tu cuenta. Espera o vuelve a intentar más tarde.');
     }
 
     try {
       const code = await this.connectSession(phone, { requestPairing: true, notifyExpired: ctx.reply });
-      if (typeof code !== 'string') return ctx.reply('Tu cuenta ya tiene una sesión de subbot registrada.');
+      if (typeof code !== 'string') {
+        return ctx.reply(`Hay credenciales de una sesión anterior para tu número. Pide al owner que ejecute .code reset ${phone}; después vuelve a solicitar .code.`);
+      }
       return ctx.reply(`Código de vinculación: *${code}*\nEn WhatsApp abre Dispositivos vinculados → Vincular con número de teléfono. No compartas este código.`);
     } catch (error) {
       this.logger.error('[SUBBOT] No se pudo generar un código:', error?.name ?? 'Error');
@@ -148,6 +154,26 @@ export class SubbotManager {
       }
       return ctx.reply('No pude generar el código de vinculación. Inténtalo de nuevo más tarde.');
     }
+  }
+
+  async resetSession(phone) {
+    if (!PHONE_PATTERN.test(phone || '')) throw new TypeError('Número de subbot inválido');
+    if (this.connecting.has(phone)) return { ok: false, reason: 'pending' };
+    const entry = this.connections.get(phone);
+    if (entry?.online) return { ok: false, reason: 'online' };
+    if (entry && !entry.registered) return { ok: false, reason: 'pending' };
+    const timer = this.reconnectTimers.get(phone);
+    if (timer) {
+      clearTimeout(timer);
+      this.reconnectTimers.delete(phone);
+    }
+    this.retryAttempts.delete(phone);
+    if (entry) {
+      this.closeEntry(entry, new Error('Sesión de subbot reiniciada por un owner'));
+      await entry.queue;
+    }
+    await clearWhatsAppAuthState(join(this.authDirectory, phone));
+    return { ok: true };
   }
 
   async connectSession(phone, { requestPairing = false, notifyExpired } = {}) {
@@ -171,6 +197,7 @@ export class SubbotManager {
         error.code = 'CODE_DISABLED';
         throw error;
       }
+      if (requestPairing && state.creds.registered) return { already: true };
       if (!state.creds.registered && !requestPairing) return null;
 
       const { version } = await this.getBaileysVersion();
