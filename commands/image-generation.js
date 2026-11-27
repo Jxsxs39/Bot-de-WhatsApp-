@@ -2,7 +2,7 @@ const API_BASE='https://aihorde.net/api/v2';
 const ANONYMOUS_API_KEY='0000000000';
 const CLIENT_AGENT='Bot-de-WhatsApp:1.0';
 const PROMPT_LIMIT=500;
-const MAX_WAIT_MS=3*60*1000;
+const MAX_WAIT_MS=5*60*1000;
 const POLL_INTERVAL_MS=5000;
 const USER_COOLDOWN_MS=60*1000;
 const MAX_ACTIVE_GENERATIONS=2;
@@ -10,6 +10,13 @@ const activeUsers=new Set();
 const lastGenerationAt=new Map();
 
 const delay=milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds));
+
+export function buildImagePrompt(userPrompt) {
+ const concept=userPrompt
+  .replace(/###/g,' ')
+  .replace(/\btralal(?:elo|ero)(?:\s+tralala)?\b/gi,'Tralalero Tralala, the surreal Italian brainrot meme character: a bright blue cartoon shark with three human legs wearing colorful sneakers, no logos');
+ return `${concept}, one clear recognizable main subject, centered full-body composition, coherent anatomy, polished detailed digital illustration, vivid balanced colors, crisp sharp focus, high quality ### blurry, low resolution, distorted anatomy, extra limbs, duplicate subjects, text, watermark`;
+}
 
 async function apiRequest(path,options={},fetchImpl) {
  const fetcher=fetchImpl||globalThis.fetch;
@@ -33,8 +40,9 @@ export async function generateImage(prompt,{fetchImpl,sleep=delay,now=Date.now,m
   method:'POST',
   headers:{'content-type':'application/json'},
   body:JSON.stringify({
-   prompt,
-   params:{n:1,steps:20,width:512,height:512,sampler_name:'k_euler_a'},
+   prompt:buildImagePrompt(prompt),
+   params:{n:1,steps:30,width:768,height:768,sampler_name:'k_dpmpp_2m',scheduler:'karras',cfg_scale:6.5},
+   models:['AlbedoBase XL 3.1','Juggernaut XL'],
    nsfw:false,
    censor_nsfw:true,
    replacement_filter:true,
@@ -92,7 +100,7 @@ export function createImageGenerationCommand(options={}) {
 
    activeUsers.add(userId);
    try {
-    await reply('🎨 Solicitud enviada a AI Horde, una red comunitaria gratuita. Puede tardar; no envíes información privada porque las solicitudes pueden compartirse.');
+    await reply('🎨 Solicitud enviada a un modelo XL de AI Horde. Puede tardar unos minutos; no envíes información privada porque las solicitudes pueden compartirse.');
    } catch(error) {
     activeUsers.delete(userId);
     throw error;
