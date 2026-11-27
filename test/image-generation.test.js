@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createImageGenerationCommand,generateImage} from '../commands/image-generation.js';
+import {buildImagePrompt,createImageGenerationCommand,generateImage} from '../commands/image-generation.js';
 
 function jsonResponse(body,status=200) {
  return {ok:status>=200&&status<300,status,json:async()=>body};
@@ -16,12 +16,16 @@ test('.img submits a free community request and sends the generated image',async
    assert.equal(options.method,'POST');
    assert.equal(options.headers.apikey,'0000000000');
    const payload=JSON.parse(options.body);
-   assert.equal(payload.prompt,'un zorro con una bufanda roja');
+   assert.match(payload.prompt,/un zorro con una bufanda roja/);
+   assert.match(payload.prompt,/one clear recognizable main subject/);
+   assert.match(payload.prompt,/### blurry, low resolution/);
    assert.equal(payload.shared,true);
    assert.equal(payload.nsfw,false);
    assert.equal(payload.censor_nsfw,true);
    assert.equal(payload.params.n,1);
-   assert.equal(payload.params.width,512);
+   assert.equal(payload.params.steps,30);
+   assert.equal(payload.params.width,768);
+   assert.deepEqual(payload.models,['AlbedoBase XL 3.1','Juggernaut XL']);
    return jsonResponse({id:'job-123'});
   }
   if(parsed.pathname.endsWith('/generate/check/job-123')) return jsonResponse({done:true});
@@ -45,6 +49,13 @@ test('.img submits a free community request and sends the generated image',async
  assert.equal(delivered.toString(),expectedImage.toString());
  assert.match(replies[0],/AI Horde/);
  assert.equal(requests.length,3);
+});
+
+test('.img expande el nombre de Tralalero Tralala para identificar el personaje',()=>{
+ const prompt=buildImagePrompt('un tralalelo');
+ assert.match(prompt,/Tralalero Tralala/);
+ assert.match(prompt,/bright blue cartoon shark with three human legs/);
+ assert.match(prompt,/colorful sneakers, no logos/);
 });
 
 test('.img valida descripciones y comunica límite del servicio',async()=>{
