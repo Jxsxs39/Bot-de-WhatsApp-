@@ -26,7 +26,7 @@ Si sqlite3 necesita compilarse en Termux, instala python, make y clang. Si falla
 - .gitignore: evita publicar archivos privados o generados.
 
 ## Comandos
-.menu, .historia, .dato, .perfil, .stats, .calc, .work, .daily, .tienda, .comprar, .inventario, .equipar, .ping, .tt, .chatgpt, .pin, .tag, .s1, .s2. Los owners pueden ver administración con `.admin` y subbots con `.code`.
+.menu, .historia, .dato, .perfil, .stats, .calc, .work, .daily, .tienda, .comprar, .inventario, .equipar, .ping, .tt, .chatgpt, .pin, .img, .tag, .s1, .s2. Los owners pueden ver administración con `.admin` y subbots con `.code`.
 Work tiene espera de 5 minutos y daily de 24 horas. Los juegos todavía no están implementados; los comandos administrativos se consultan con `.admin`.
 También se aceptan comandos con prefijo `.` enviados desde la cuenta vinculada; sus mensajes propios sin prefijo se ignoran para evitar respuestas en bucle.
 
@@ -37,6 +37,8 @@ También se aceptan comandos con prefijo `.` enviados desde la cuenta vinculada;
 La economía incluye una tienda de títulos cosméticos: consulta `.tienda`, compra con `.comprar <id>`, revisa tus artículos con `.inventario` y equipa uno con `.equipar <id>` (o quítalo con `.equipar ninguno`). Las compras se guardan por usuario y el título equipado aparece en `.perfil`.
 
 `.pin <contexto>` busca hasta tres fotos relacionadas en Wikimedia Commons y complementa los resultados con Wikipedia y Bing Imágenes cuando hace falta. Envía las imágenes sin texto ni pies de foto. También se acepta `.pinterest <contexto>`.
+
+`.img <descripción>` genera una imagen gratis a través de AI Horde, una red comunitaria de equipos voluntarios. Puede tardar hasta tres minutos según la cola y solo genera una imagen de 512 × 512 por solicitud. Las solicitudes pueden compartirse con el servicio; no incluyas información privada. Hay un límite de una solicitud por usuario cada minuto.
 
 `.tag <mensaje>` envía solo el texto y usa la mención general nativa de WhatsApp, sin añadir los nombres o números de los integrantes al mensaje. Solo está disponible para administradores del grupo.
 
