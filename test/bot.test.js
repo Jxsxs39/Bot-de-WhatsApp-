@@ -30,6 +30,40 @@ test('premios concurrentes y usuarios independientes',async()=>{
  assert.equal((await db.claim('a','daily',100,15,86400000,86401000)).ok,true);
  }finally{await db.close();}
 });
+test('compras de la tienda son persistentes y no permiten gastar dos veces el saldo',async()=>{
+ const db=await new Database(':memory:').init();
+ try {
+  await db.claim('shop-user','daily',1000,0,86400000,1000);
+  const results=await Promise.all([
+   db.buyItem('shop-user','aprendiz',700),
+   db.buyItem('shop-user','aprendiz',700)
+  ]);
+  assert.equal(results.filter(result=>result.ok).length,1);
+  assert.equal(results.filter(result=>result.reason==='owned').length,1);
+  assert.equal((await db.getStats('shop-user')).coins,300);
+  assert.equal((await db.buyItem('shop-user','aventurero',400)).reason,'funds');
+  assert.equal(await db.equipTitle('shop-user','aventurero'),false);
+  assert.equal(await db.equipTitle('shop-user','aprendiz'),true);
+  assert.deepEqual(await db.getInventory('shop-user'),{items:['aprendiz'],equipped:'aprendiz'});
+ } finally {await db.close();}
+});
+test('.tienda permite comprar, equipar y mostrar títulos en el perfil',async()=>{
+ const db=await new Database(':memory:').init();
+ try {
+  await db.claim('shop-user@s.whatsapp.net','daily',1000,0,86400000,1000);
+  const sent=[];
+  const handler=createCommandHandler({sendMessage:async(...args)=>{sent.push(args);}},db);
+  for(const command of ['.tienda','.comprar aprendiz','.inventario','.equipar aprendiz','.perfil']) {
+   await handler.handleMessage({key:{remoteJid:'shop-user@s.whatsapp.net'},message:{conversation:command}});
+  }
+  assert.equal(sent.length,5);
+  assert.match(sent[0][1].text,/Aprendiz.*250/);
+  assert.match(sent[1][1].text,/Saldo restante: 750/);
+  assert.match(sent[2][1].text,/Tus títulos/);
+  assert.match(sent[3][1].text,/Equipaste el título/);
+  assert.match(sent[4][1].text,/Título: Aprendiz/);
+ } finally {await db.close();}
+});
 test('mensaje normal no genera respuesta ni error',async()=>{
  const db=await new Database(':memory:').init();
  try{const sent=[];const handler=createCommandHandler({sendMessage:async(...args)=>sent.push(args)},db);

@@ -1,4 +1,5 @@
 import {styleBotReply} from '../bot-style.js';
+import {SHOP_ITEMS} from './economy.js';
 // Cada objeto contiene el nombre del comando y la función que ejecuta.
 const historiaImageUrl = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQuJNQnSpOsMvWoDllNutNEUIvxnfcTcKNn2oCi76KyjQ&s=10';
 const IMAGE_SEARCH_LIMIT=3;
@@ -251,7 +252,7 @@ export default [
  // Menú dinámico: se actualiza al registrar otro comando.
  {name:'menu', async run(ctx) {
   const {replyWithImage,commands}=ctx;
-  const sections=[['General',['ping','p','menu','id','historia','dato','perfil','stats','calc','chatgpt','pin','tag']],['Economía',['work','daily']],['Stickers',['sticker','s','stiker']]];
+  const sections=[['General',['ping','p','menu','id','historia','dato','perfil','stats','calc','chatgpt','pin','tag']],['Economía',['work','daily','tienda','comprar','inventario','equipar']],['Stickers',['sticker','s','stiker']]];
   const known=new Set(sections.flatMap(([,names])=>names));
   sections.push(['Otros',[...commands.keys()].filter(n=>!known.has(n))]);
   const blocks=sections.map(([title,names])=>[title,names.filter(n=>commands.has(n))]);
@@ -288,7 +289,7 @@ export default [
   return sock.sendMessage(chatId,{text,mentionAll:true},{quoted:rawMessage});
  }},
  // Consulta únicamente el perfil de quien envía el mensaje.
- {name:'perfil', async run({reply,db,userId}) { const u=await db.getStats(userId); await reply('👤 *Tu perfil*\n• Coins: '+u.coins+'\n• Nivel: '+u.level+'\n• XP: '+u.xp); }},
+ {name:'perfil', async run({reply,db,userId}) { const u=await db.getStats(userId); const title=SHOP_ITEMS.find(item=>item.id===u.equipped_title)?.title||u.equipped_title; await reply('👤 *Tu perfil*\n• Coins: '+u.coins+'\n• Nivel: '+u.level+'\n• XP: '+u.xp+(title?'\n• Título: '+title:'')); }},
  // Muestra estadísticas personales sin publicar identificadores privados.
  {name:'stats', async run({reply,db,userId}) { const u=await db.getStats(userId); await reply('📊 *Estadísticas*\n• Mensajes: '+u.messages+'\n• Coins: '+u.coins+'\n• XP: '+u.xp+'\n• Nivel: '+u.level); }}
 ];
