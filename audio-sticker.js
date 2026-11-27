@@ -1,7 +1,7 @@
-import { prepareWAMessageMedia } from '@rexxhayanasi/elaina-baileys';
+import { generateWAMessageFromContent, prepareWAMessageMedia } from '@rexxhayanasi/elaina-baileys';
 import { randomBytes } from 'node:crypto';
 
-export async function sendAudioSticker(sock, chatId, sticker, isAnimated, audio, seconds) {
+export async function sendAudioSticker(sock, chatId, sticker, isAnimated, audio, seconds, quoted) {
   if (typeof sock?.waUploadToServer !== 'function' || typeof sock?.relayMessage !== 'function') {
     throw new Error('Baileys socket does not support audio sticker uploads');
   }
@@ -22,8 +22,11 @@ export async function sendAudioSticker(sock, chatId, sticker, isAnimated, audio,
     ptt: true
   };
 
-  const payload = Object.assign(Object.create(preparedSticker), {
-    audioStickerMessage: { message: preparedSticker },
+  const stickerMessage = quoted
+    ? generateWAMessageFromContent(chatId, preparedSticker, { userJid: sock.user?.id, quoted }).message
+    : preparedSticker;
+  const payload = Object.assign(Object.create(stickerMessage), {
+    audioStickerMessage: { message: stickerMessage },
     messageContextInfo: { messageSecret: randomBytes(32) }
   });
   return sock.relayMessage(chatId, payload, {});

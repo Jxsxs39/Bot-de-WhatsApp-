@@ -26,7 +26,7 @@ Si sqlite3 necesita compilarse en Termux, instala python, make y clang. Si falla
 - .gitignore: evita publicar archivos privados o generados.
 
 ## Comandos
-.menu, .historia, .dato, .perfil, .stats, .calc, .work, .daily, .ping, .tt, .chatgpt, .pin, .s1, .s2. Los owners pueden ver administración con `.admin` y subbots con `.code`.
+.menu, .historia, .dato, .perfil, .stats, .calc, .work, .daily, .ping, .tt, .chatgpt, .pin, .tag, .s1, .s2. Los owners pueden ver administración con `.admin` y subbots con `.code`.
 Work tiene espera de 5 minutos y daily de 24 horas. Los juegos todavía no están implementados; los comandos administrativos se consultan con `.admin`.
 También se aceptan comandos con prefijo `.` enviados desde la cuenta vinculada; sus mensajes propios sin prefijo se ignoran para evitar respuestas en bucle.
 
@@ -35,6 +35,8 @@ También se aceptan comandos con prefijo `.` enviados desde la cuenta vinculada;
 `.calc <operación>` resuelve sumas, restas, multiplicaciones, divisiones, porcentajes y potencias; acepta paréntesis y decimales con punto o coma. Para calcular un porcentaje de una cantidad, escribe, por ejemplo, `.calc 30%30000` (resultado: 9000).
 
 `.pin <contexto>` busca hasta tres fotos relacionadas en Wikimedia Commons y complementa los resultados con Wikipedia y Bing Imágenes cuando hace falta. Envía las imágenes sin texto ni pies de foto. También se acepta `.pinterest <contexto>`.
+
+`.tag <mensaje>` envía el texto y menciona a todos los integrantes del grupo. Solo está disponible para administradores del grupo.
 
 `.chatgpt <pregunta>` consulta la API de OpenAI y responde con una personalidad cálida inspirada en Historia Reiss. Configura `OPENAI_API_KEY` en las variables del hosting; opcionalmente, `OPENAI_MODEL` cambia el modelo (por defecto `gpt-4o-mini`). El texto después del comando se envía a OpenAI y el uso de la API puede tener costo. Cada consulta es independiente y admite hasta 4.000 caracteres.
 

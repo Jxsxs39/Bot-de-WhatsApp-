@@ -281,6 +281,7 @@ test('long videos are trimmed to sticker length and produce WebP and audio outpu
     const sentMediaTypes = [];
     let relayedPayload;
     await sendAudioSticker({
+      user: { id: '456@s.whatsapp.net' },
       waUploadToServer: async (_filePath, { mediaType }) => {
         sentMediaTypes.push(mediaType);
         return { mediaUrl: 'https://example.invalid/media', directPath: '/media/audio-sticker' };
@@ -289,8 +290,13 @@ test('long videos are trimmed to sticker length and produce WebP and audio outpu
         assert.equal(chatId, '123@s.whatsapp.net');
         relayedPayload = payload;
       }
-    }, '123@s.whatsapp.net', videoSticker.sticker, true, videoSticker.audio, videoSticker.duration);
+    }, '123@s.whatsapp.net', videoSticker.sticker, true, videoSticker.audio, videoSticker.duration, {
+      key: { remoteJid: '123@s.whatsapp.net', id: 'source-1' },
+      message: { conversation: '.s1' }
+    });
     assert.deepEqual(sentMediaTypes.sort(), ['audio', 'sticker']);
+    assert.equal(relayedPayload.stickerMessage.contextInfo.stanzaId, 'source-1');
+    assert.equal(relayedPayload.stickerMessage.contextInfo.quotedMessage.conversation, '.s1');
     assert.ok(proto.Message.encode(relayedPayload).finish().length > 0);
   } finally {
     await rm(directory, { recursive: true, force: true });

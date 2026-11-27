@@ -50,6 +50,7 @@ test('comandos propios de la cuenta vinculada sí reciben respuesta',async()=>{
    message:{conversation:'.ping'}
   });
   assert.equal(sent.length,2);
+  assert.equal(sent[0][2].quoted.message.conversation,'.ping');
   assert.match(sent[0][1].text,/Pong/);
   assert.equal(sent[1][1].edit.id,'sent-1');
   assert.equal((await db.getStats('456@s.whatsapp.net')).messages,1);
@@ -136,6 +137,44 @@ test('.calc evalúa operaciones de forma segura',async()=>{
   assert.match(sent[6][1].text,/Operación no válida/);
  }finally{await db.close();}
 });
+test('.tag menciona a todos en grupos y limita el uso a administradores',async()=>{
+ const db=await new Database(':memory:').init();
+ try {
+  const sent=[];
+  const participants=[
+   {id:'123@s.whatsapp.net',admin:'admin'},
+   {id:'456:2@s.whatsapp.net',admin:null}
+  ];
+  const handler=createCommandHandler({
+   groupMetadata:async()=>({participants}),
+   sendMessage:async(...args)=>{sent.push(args);return {key:{id:'tagged'}};}
+  },db);
+  const rawMessage={
+   key:{remoteJid:'789@g.us',participant:'123:4@s.whatsapp.net',id:'command-1'},
+   message:{conversation:'.tag Aviso importante'}
+  };
+  await handler.handleMessage(rawMessage);
+  assert.equal(sent.length,1);
+  assert.equal(sent[0][1].text,'Aviso importante\n\n@123 @456');
+  assert.deepEqual(sent[0][1].mentions,['123@s.whatsapp.net','456@s.whatsapp.net']);
+  assert.equal(sent[0][2].quoted,rawMessage);
+
+  participants[0].admin=null;
+  await handler.handleMessage({
+   key:{remoteJid:'789@g.us',participant:'123@s.whatsapp.net'},
+   message:{conversation:'.tag No autorizado'}
+  });
+  assert.equal(sent.length,2);
+  assert.match(sent[1][1].text,/Solo los administradores/);
+
+  await handler.handleMessage({
+   key:{remoteJid:'123@s.whatsapp.net'},
+   message:{conversation:'.tag No es un grupo'}
+  });
+  assert.equal(sent.length,3);
+  assert.match(sent[2][1].text,/solo funciona en grupos/);
+ } finally {await db.close();}
+});
 test('.pin busca el tema indicado en Pinterest y valida la entrada',async()=>{
  const db=await new Database(':memory:').init();
  const pages={};
@@ -185,6 +224,7 @@ test('.pin busca el tema indicado en Pinterest y valida la entrada',async()=>{
   assert.equal(sent[0][1].image.url,'https://thumb.wikimedia.org/image-0.jpg');
   assert.equal(sent[2][1].image.url,'https://thumb.wikimedia.org/image-2.jpg');
   assert.ok(sent.every(([,message])=>message.image && !('caption' in message) && !('text' in message)));
+  assert.ok(sent.slice(0,3).every(([, ,options])=>options?.quoted?.message.conversation==='.pin vestidos de verano'));
 
   await handler.handleMessage({
    key:{remoteJid:'123@s.whatsapp.net'},
