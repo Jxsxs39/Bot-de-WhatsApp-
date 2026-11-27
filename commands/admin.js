@@ -143,6 +143,11 @@ export async function handleAdmin(ctx) {
     const result=await fetch(url,{method:'POST',redirect:'error',signal:AbortSignal.timeout(15000)});
     return ctx.reply(result.ok?'Actualización iniciada.':'No se pudo iniciar la actualización.');
   }
-  await ctx.reply('Reiniciando bot…');
-  setTimeout(()=>process.kill(process.pid,'SIGTERM'),500).unref();
+  if(cmd==='restart'){
+    if(typeof ctx.reloadSocket!=='function') return ctx.reply('No se puede reiniciar la conexión desde este proceso.');
+    await ctx.reply('Reconectando WhatsApp; el servidor seguirá encendido…');
+    ctx.reloadSocket();
+    return;
+  }
+  return ctx.reply('Comando administrativo no implementado.');
 }

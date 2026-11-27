@@ -61,3 +61,21 @@ test('solo un owner puede limpiar credenciales antiguas de un subbot',async()=>{
  assert.equal(requestedPhone,'123456789');
  assert.match(replies[1],/Acceso administrativo denegado/);
 });
+test('.restart reconecta WhatsApp sin terminar el proceso del hosting',async()=>{
+ let restarted=0;
+ const replies=[];
+ await handleAdmin({
+  command:'restart',args:[],userId:'584149164536@s.whatsapp.net',
+  reloadSocket:()=>{restarted++;},
+  reply:async text=>replies.push(text)
+ });
+ assert.equal(restarted,1);
+ assert.match(replies[0],/el servidor seguirá encendido/);
+
+ let unavailable;
+ await handleAdmin({
+  command:'restart',args:[],userId:'584149164536@s.whatsapp.net',
+  reply:async text=>{unavailable=text;}
+ });
+ assert.match(unavailable,/No se puede reiniciar la conexión/);
+});
