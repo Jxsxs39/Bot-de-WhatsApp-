@@ -52,7 +52,7 @@ export function createCommandHandler(sock, db, reloadSocket, subbots) {
       return;
     }
     const reply = async text => {
-      const result = await sock.sendMessage(ctx.chatId, { text: styleBotReply(text, ctx.command) });
+      const result = await sock.sendMessage(ctx.chatId, { text: styleBotReply(text, ctx.command) }, { quoted: msg });
       console.log('[RESPUESTA] Enviada al chat');
       return result;
     };
@@ -61,17 +61,17 @@ export function createCommandHandler(sock, db, reloadSocket, subbots) {
       if (typeof caption === 'string' && caption.length > 0) {
         message.caption = styleBotReply(caption, ctx.command);
       }
-      const result = await sock.sendMessage(ctx.chatId, message);
+      const result = await sock.sendMessage(ctx.chatId, message, { quoted: msg });
       console.log('[RESPUESTA] Imagen enviada al chat');
       return result;
     };
     const replyWithSticker = async (sticker, isAnimated = false) => {
-      const result = await sock.sendMessage(ctx.chatId, { sticker, isAnimated });
+      const result = await sock.sendMessage(ctx.chatId, { sticker, isAnimated }, { quoted: msg });
       console.log('[RESPUESTA] Sticker enviado al chat');
       return result;
     };
     const replyWithAudioSticker = async (sticker, isAnimated, audio, duration) => {
-      const result = await sendAudioSticker(sock, ctx.chatId, sticker, isAnimated, audio, duration);
+      const result = await sendAudioSticker(sock, ctx.chatId, sticker, isAnimated, audio, duration, msg);
       console.log('[RESPUESTA] Audio sticker enviado al chat');
       return result;
     };

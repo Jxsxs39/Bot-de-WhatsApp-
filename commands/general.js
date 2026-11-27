@@ -251,7 +251,7 @@ export default [
  // Menú dinámico: se actualiza al registrar otro comando.
  {name:'menu', async run(ctx) {
   const {replyWithImage,commands}=ctx;
-  const sections=[['General',['ping','p','menu','id','historia','dato','perfil','stats','calc','chatgpt','pin']],['Economía',['work','daily']],['Stickers',['sticker','s','stiker']]];
+  const sections=[['General',['ping','p','menu','id','historia','dato','perfil','stats','calc','chatgpt','pin','tag']],['Economía',['work','daily']],['Stickers',['sticker','s','stiker']]];
   const known=new Set(sections.flatMap(([,names])=>names));
   sections.push(['Otros',[...commands.keys()].filter(n=>!known.has(n))]);
   const blocks=sections.map(([title,names])=>[title,names.filter(n=>commands.has(n))]);
@@ -271,6 +271,26 @@ export default [
   } catch(error) {
    await reply(`🧮 ${error.message}`);
   }
+ }},
+ {name:'tag', async run({reply,args,chatId,userId,rawMessage,sock}) {
+  if(!chatId.endsWith('@g.us')) return reply('Este comando solo funciona en grupos.');
+  const text=args.join(' ').trim();
+  if(!text) return reply('Uso: .tag <mensaje>. Menciona a todos los integrantes del grupo.');
+  if(text.length>1000) return reply('El mensaje no puede superar los 1000 caracteres.');
+  const {participants}=await sock.groupMetadata(chatId);
+  const normalizeJid=jid=>typeof jid==='string'?jid.replace(/:\d+@/,'@'):undefined;
+  const sender=participants.find(participant=>
+   [participant.id,participant.jid,participant.phoneNumber].some(jid=>normalizeJid(jid)===userId)
+  );
+  if(!['admin','superadmin'].includes(sender?.admin)) {
+   return reply('Solo los administradores del grupo pueden usar .tag.');
+  }
+  const mentions=[...new Set(participants
+   .map(participant=>normalizeJid(participant.id||participant.jid||participant.phoneNumber))
+   .filter(jid=>/@(s\.whatsapp\.net|lid)$/.test(jid||'')))];
+  if(!mentions.length) return reply('No pude obtener los integrantes del grupo para mencionarlos.');
+  const mentionText=mentions.map(jid=>'@'+jid.split('@')[0].replace(/:\d+$/,'')).join(' ');
+  return sock.sendMessage(chatId,{text:`${text}\n\n${mentionText}`,mentions},{quoted:rawMessage});
  }},
  // Consulta únicamente el perfil de quien envía el mensaje.
  {name:'perfil', async run({reply,db,userId}) { const u=await db.getStats(userId); await reply('👤 *Tu perfil*\n• Coins: '+u.coins+'\n• Nivel: '+u.level+'\n• XP: '+u.xp); }},
