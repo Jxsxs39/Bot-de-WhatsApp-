@@ -32,7 +32,7 @@ export function visibleAdminNames(priority){return [...adminNames].filter(name=>
 export function adminMenuLines(){return [...adminNames].map(n=>'• .'+n+' — '+(n==='admin'?'Todos':n==='code'?'Solicitar subbot; activar/desactivar solo owners':primaryOnly.has(n)?'Solo owner principal':n==='reload'?'Owners o dueño del socket':'Solo owners'));}
 export async function handleAdmin(ctx) {
   if(ctx.command==='admin') return ctx.reply('👑 *Administración*\n\n'+adminMenuLines().join('\n'));
-  if(ctx.command==='code' && !['on','off','status'].includes((ctx.args?.[0] || '').toLowerCase())) {
+  if(ctx.command==='code' && !['on','off','status','reset'].includes((ctx.args?.[0] || '').toLowerCase())) {
     if(ctx.args?.length) return ctx.reply('Uso: .code para vincular tu propia cuenta; .code on/off/status para administración.');
     if(!ctx.subbots) return ctx.reply('El servicio de subbots no está disponible.');
     return ctx.subbots.requestPairingCode(ctx);
@@ -52,6 +52,18 @@ export async function handleAdmin(ctx) {
     if(action==='status') {
       const {codeEnabled,connected,registered,pending}=ctx.subbots.getStatus();
       return ctx.reply(`.code está ${codeEnabled?'activado':'desactivado'}.\nSubbots conectados: ${connected}.\nSesiones registradas: ${registered}.\nVinculaciones pendientes: ${pending}.`);
+    }
+    if(action==='reset') {
+      if(ctx.args.length!==2 || !/^\+?\d{8,15}$/.test(ctx.args[1])) {
+        return ctx.reply('Uso: .code reset <número internacional sin espacios>. Solo borra la sesión guardada para ese número.');
+      }
+      const phone=ctx.args[1].replace(/^\+/,'');
+      const result=await ctx.subbots.resetSession(phone);
+      if(!result.ok) {
+        if(result.reason==='online') return ctx.reply('Esa sesión está conectada. Desconéctala primero antes de reiniciarla.');
+        return ctx.reply('Hay una vinculación en curso para ese número. Espera a que termine antes de reiniciarla.');
+      }
+      return ctx.reply(`Se borró la sesión guardada para ${phone}. Ahora esa cuenta puede solicitar un nuevo código con .code.`);
     }
     if(action!=='on' && action!=='off') return ctx.reply('Uso: .code on, .code off o .code status.');
     if(ctx.args.length!==1) return ctx.reply('Uso: .code on, .code off o .code status.');
