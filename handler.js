@@ -57,7 +57,7 @@ export function createCommandHandler(sock, db, reloadSocket, subbots) {
       return result;
     };
     const replyWithImage = async (url, caption) => {
-      const message = { image: { url } };
+      const message = { image: Buffer.isBuffer(url) ? url : { url } };
       if (typeof caption === 'string' && caption.length > 0) {
         message.caption = styleBotReply(caption, ctx.command);
       }
