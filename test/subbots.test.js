@@ -19,6 +19,42 @@ test('una misma actualización solo se procesa una vez entre sockets',async()=>{
  assert.equal(handled,1);
 });
 
+test('renueva las conexiones de subbots activos sin perder sus sesiones',async()=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'subbot-refresh-test-'));
+ const authDirectory=path.join(directory,'sessions');
+ const phone='123456789';
+ await mkdir(path.join(authDirectory,phone),{recursive:true});
+ const sockets=[];
+ const manager=new SubbotManager({
+  authDirectory,
+  settingsFile:path.join(directory,'data','subbots.json'),
+  createCommandHandler:()=>({handleMessage:async()=>{}}),
+  dispatchMessage:async()=>{},
+  loadAuthState:async()=>({state:{creds:{registered:true}},saveCreds:async()=>{}}),
+  getBaileysVersion:async()=>({version:[2,3000,101]}),
+  makeSocket:()=>{
+   const ev=new EventEmitter();
+   let ended=false;
+   const sock={ev,end:()=>{ended=true;}};
+   sockets.push({sock,isEnded:()=>ended});
+   return sock;
+  },
+  logger:{log(){},error(){}}
+ });
+ try {
+  await manager.start();
+  sockets[0].sock.ev.emit('connection.update',{connection:'open'});
+  assert.equal(manager.getStatus().connected,1);
+  manager.refreshConnections();
+  assert.equal(sockets[0].isEnded(),true);
+  assert.equal(manager.getStatus().connected,0);
+  assert.equal(manager.reconnectTimers.has(phone),true);
+ } finally {
+  await manager.shutdown();
+  await rm(directory,{recursive:true,force:true});
+ }
+});
+
 test('.code solo genera un código en privado y vincula el número del solicitante',async()=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'subbot-test-'));
  let requestedPhone;
