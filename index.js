@@ -12,7 +12,7 @@ import {clearWhatsAppAuthState} from './whatsapp-session.js';
 // Permisos privados para los archivos nuevos de sesión y base de datos.
 process.umask(0o077);
 const db=new Database();
-let socket, retry, stopping=false, attempts=0, queue=Promise.resolve(), rl;
+let socket, retry, refreshTimer, stopping=false, attempts=0, queue=Promise.resolve(), rl;
 let subbots;
 const messageDeduplicator=new MessageDeduplicator();
 // Render y otros servidores sin terminal pueden proporcionar el número por variable de entorno.
@@ -70,8 +70,21 @@ async function connect() {
   const onConnection=({connection,lastDisconnect,qr})=>{
     if(socket!==sock||stopping) return;
     if(qr && !state.creds.registered) void requestCode();
-    if(connection==='open'){attempts=0;console.log('Historia Reiss conectada. Prefijo .');}
+    if(connection==='open'){
+      attempts=0;
+      clearTimeout(refreshTimer);
+      refreshTimer=setTimeout(()=>{
+        refreshTimer=null;
+        if(stopping||socket!==sock) return;
+        console.log('Renovando conexiones de WhatsApp para mantener el bot disponible.');
+        subbots?.refreshConnections();
+        sock.end(undefined);
+      },30*60*1000);
+      refreshTimer.unref?.();
+      console.log('Historia Reiss conectada. Prefijo .');
+    }
     if(connection==='close'){
+      clearTimeout(refreshTimer);refreshTimer=null;
       cleanup();socket=null;
       const code=lastDisconnect?.error?.output?.statusCode;
       console.log('Conexión cerrada; estado:',code ?? 'desconocido');
@@ -104,7 +117,7 @@ function schedule(){
 }
 // Cierre ordenado: cancela temporizadores, espera mensajes y cierra SQLite.
 async function shutdown(){
-  if(stopping)return;stopping=true;clearTimeout(retry);rl?.close();
+  if(stopping)return;stopping=true;clearTimeout(retry);clearTimeout(refreshTimer);rl?.close();
   socket?.end(undefined);healthServer?.close();await subbots?.shutdown();await queue;await db.close();
 }
 process.on('SIGINT',()=>void shutdown());
