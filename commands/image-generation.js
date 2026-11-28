@@ -105,7 +105,11 @@ export function createImageGenerationCommand(options={}) {
    if(prompt.length>PROMPT_LIMIT) return reply(`La descripción no puede superar los ${PROMPT_LIMIT} caracteres.`);
    if(activeUsers.has(userId)) return reply('Ya tienes una imagen en proceso. Espera a que termine.');
    if(activeUsers.size>=MAX_ACTIVE_GENERATIONS) return reply('Hay varias imágenes generándose. Prueba de nuevo en un momento.');
-   const remaining=USER_COOLDOWN_MS-(Date.now()-(lastGenerationAt.get(userId)||0));
+   const now=Date.now();
+   for(const [id,generatedAt] of lastGenerationAt) {
+    if(now-generatedAt>=USER_COOLDOWN_MS) lastGenerationAt.delete(id);
+   }
+   const remaining=USER_COOLDOWN_MS-(now-(lastGenerationAt.get(userId)||0));
    if(remaining>0) return reply(`Espera ${Math.ceil(remaining/1000)} segundos antes de pedir otra imagen.`);
 
    activeUsers.add(userId);

@@ -31,6 +31,17 @@ test('premios concurrentes y usuarios independientes',async()=>{
  assert.equal((await db.claim('a','daily',100,15,86400000,86401000)).ok,true);
  }finally{await db.close();}
 });
+test('registerMessage crea el perfil e incrementa correctamente el contador',async()=>{
+ const db=await new Database(':memory:').init();
+ try {
+  await db.registerMessage('message-user');
+  await db.registerMessage('message-user');
+  assert.equal((await db.getStats('message-user')).messages,2);
+  const profile=await db.db.get('SELECT firstSeenAt,lastSeenAt FROM users WHERE id=?','message-user');
+  assert.ok(profile.firstSeenAt);
+  assert.ok(profile.lastSeenAt);
+ } finally {await db.close();}
+});
 test('compras de la tienda son persistentes y no permiten gastar dos veces el saldo',async()=>{
  const db=await new Database(':memory:').init();
  try {

@@ -36,8 +36,10 @@ export default class Database {
   }
   // Incremento SQL: evita sobrescribir el contador con una lectura antigua.
   async registerMessage(id) {
-    await this.ensureUser(id);
-    await this.db.run('UPDATE users SET messages=messages+1,lastSeenAt=? WHERE id=?',new Date().toISOString(),id);
+    if (!id) throw new TypeError('Falta usuario');
+    const now=new Date().toISOString();
+    await this.db.run(`INSERT INTO users (id,messages,firstSeenAt,lastSeenAt) VALUES (?,1,?,?)
+      ON CONFLICT(id) DO UPDATE SET messages=users.messages+1,lastSeenAt=excluded.lastSeenAt`,id,now,now);
   }
   // Devuelve valores iniciales si todavía no existe un perfil.
   async getStats(id) {
