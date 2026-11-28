@@ -115,14 +115,6 @@ export class SubbotManager {
     return { codeEnabled: this.codeEnabled, connected, registered, pending };
   }
 
-  refreshConnections() {
-    for (const entry of [...this.connections.values()]) {
-      if (!entry.registered || !entry.online) continue;
-      this.closeEntry(entry, new Error('Renovación programada de conexión'));
-      this.scheduleReconnect(entry.phone);
-    }
-  }
-
   async requestPairingCode(ctx) {
     if (!this.codeEnabled) return ctx.reply('El comando .code está desactivado temporalmente.');
     if (ctx.chatId?.endsWith('@g.us')) {
