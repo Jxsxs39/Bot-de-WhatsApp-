@@ -19,6 +19,16 @@ const messageDeduplicator=new MessageDeduplicator();
 // Render Web Service exige un puerto HTTP. No expone datos ni credenciales del bot.
 const healthServer=process.env.PORT ? startHealthServer(process.env.PORT) : undefined;
 let phone=process.env.WHATSAPP_PHONE?.replace(/\D/g,'');
+let baileysVersionPromise;
+function getBaileysVersion() {
+  if (!baileysVersionPromise) {
+    baileysVersionPromise=fetchLatestBaileysVersion().catch(error=>{
+      baileysVersionPromise=undefined;
+      throw error;
+    });
+  }
+  return baileysVersionPromise;
+}
 // Crea el socket y recupera la sesión existente; no pide otro código si ya está registrada.
 async function connect() {
   if(stopping) return;
@@ -31,7 +41,7 @@ async function connect() {
     finally { rl.close(); rl=null; }
   }
   if(!state.creds.registered && !/^\d{8,15}$/.test(phone || '')) throw new Error('Número internacional inválido');
-  const {version}=await fetchLatestBaileysVersion();
+  const {version}=await getBaileysVersion();
   if(stopping) return;
   const sock=makeWASocket({version,auth:state,logger:pino({level:'silent'}),browser:['Ubuntu','Chrome','22.04']});
   socket=sock;
@@ -116,7 +126,8 @@ try {
   console.log('[SQLite] Base de datos lista');
   subbots=new SubbotManager({
     createCommandHandler:sock=>createCommandHandler(sock,db,undefined,subbots),
-    dispatchMessage:(handler,msg)=>messageDeduplicator.dispatch(handler,msg)
+    dispatchMessage:(handler,msg)=>messageDeduplicator.dispatch(handler,msg),
+    getBaileysVersion
   });
   await subbots.start();
   await connect();

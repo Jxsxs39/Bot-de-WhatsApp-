@@ -9,7 +9,9 @@ import {
 import { sendAudioSticker } from '../audio-sticker.js';
 
 const SESSION_SECONDS = 60;
+const MAX_ACTIVE_GENERATIONS = 1;
 const audioStickerSessions = new Map();
+let activeGenerations = 0;
 
 function sessionKey(ctx) {
   return `${ctx.chatId}:${ctx.userId}`;
@@ -41,8 +43,14 @@ function startAudioStickerSession(ctx, sticker) {
 }
 
 export async function withGenerationNotice(ctx, operation) {
-  const notice = await ctx.reply('⏳ Tu sticker se está generando…');
+  if (activeGenerations >= MAX_ACTIVE_GENERATIONS) {
+    await ctx.reply('⏳ El bot está procesando otro sticker para ahorrar recursos. Inténtalo de nuevo en un momento.');
+    return false;
+  }
+  activeGenerations++;
+  let notice;
   try {
+    notice = await ctx.reply('⏳ Tu sticker se está generando…');
     return await operation();
   } finally {
     if (notice?.key) {
@@ -52,6 +60,7 @@ export async function withGenerationNotice(ctx, operation) {
         console.error('[STICKER] No se pudo borrar el aviso de generación:', error?.name || 'Error');
       }
     }
+    activeGenerations--;
   }
 }
 

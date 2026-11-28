@@ -118,6 +118,34 @@ test('.s1 muestra el progreso y borra el aviso al terminar o fallar', async () =
   assert.deepEqual(events.map(event => event[0]), ['reply', 'delete']);
 });
 
+test('limita conversiones simultáneas de stickers para proteger recursos', async () => {
+  let releaseFirst;
+  let firstStarted = false;
+  const replies = [];
+  const ctx = {
+    reply: async text => {
+      replies.push(text);
+      return undefined;
+    }
+  };
+  const first = withGenerationNotice(ctx, async () => {
+    firstStarted = true;
+    await new Promise(resolve => { releaseFirst = resolve; });
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(firstStarted, true);
+
+  let secondStarted = false;
+  await withGenerationNotice(ctx, async () => { secondStarted = true; });
+  assert.equal(secondStarted, false);
+  assert.match(replies[1], /ahorrar recursos/);
+
+  releaseFirst();
+  await first;
+  await withGenerationNotice(ctx, async () => { secondStarted = true; });
+  assert.equal(secondStarted, true);
+});
+
 test('video conversion retries with a shorter clip after timing out', async () => {
   const stickerDurations = [];
   let audioDuration;
