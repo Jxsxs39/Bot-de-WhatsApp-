@@ -32,7 +32,7 @@ También se aceptan comandos con prefijo `.` enviados desde la cuenta vinculada;
 
 `.ping` confirma que el bot está activo. `.tt <enlace>` valida enlaces de TikTok y recuerda usar la descarga oficial si el creador la habilitó; no descarga contenido automáticamente.
 
-Para recuperar conexiones de WhatsApp que se quedan vinculadas pero dejan de recibir mensajes, el bot renueva la conexión principal y las sesiones de subbots activos cada 30 minutos, sin apagar el proceso ni reiniciar el hosting. El hosting debe mantener el proceso `npm start` activo y conservar el almacenamiento de sesiones.
+El proceso del bot se reinicia automáticamente cada 30 minutos dentro del contenedor y vuelve a arrancar si termina inesperadamente; esto no reinicia ni apaga el hosting. Conserva el almacenamiento de sesiones de WhatsApp para que las cuentas principal y subbots se reconecten sin volver a vincularse.
 
 `.calc <operación>` resuelve sumas, restas, multiplicaciones, divisiones, porcentajes y potencias; acepta paréntesis y decimales con punto o coma. Para calcular un porcentaje de una cantidad, escribe, por ejemplo, `.calc 30%30000` (resultado: 9000).
 
