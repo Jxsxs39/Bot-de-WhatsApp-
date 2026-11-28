@@ -44,6 +44,8 @@ La economía incluye una tienda de títulos cosméticos: consulta `.tienda`, com
 
 `.tag <mensaje>` envía solo el texto y usa la mención general nativa de WhatsApp, sin añadir los nombres o números de los integrantes al mensaje. Solo está disponible para administradores del grupo.
 
+`.pagomovil <nombre> <monto>` publica un aviso de Pago Móvil reportado, por ejemplo `.pagomovil Ana Pérez 125,50`. Solo los owners pueden usarlo. El aviso no ejecuta ni verifica transferencias; confirma el abono directamente en BNC antes de marcarlo como pagado.
+
 `.chatgpt <pregunta>` consulta la API de OpenAI y responde con una personalidad cálida inspirada en Historia Reiss. Configura `OPENAI_API_KEY` en las variables del hosting; opcionalmente, `OPENAI_MODEL` cambia el modelo (por defecto `gpt-4o-mini`). El texto después del comando se envía a OpenAI y el uso de la API puede tener costo. Cada consulta es independiente y admite hasta 4.000 caracteres.
 
 `.s1` crea un audio sticker: con un video combina el sticker animado y su audio, con un máximo de 25 segundos; con una foto abre una sesión de 60 segundos para enviar o responder con un audio de hasta 25 segundos. Usa `.s1 cancelar` para cerrar la sesión. `.s2` crea un sticker sin audio desde una foto o video y recorta videos a 5 segundos. Responde al medio con el comando o envíalo como caption; los medios deben pesar menos de 16 MB. Para proteger el hosting, solo se convierte un sticker a la vez; las solicitudes simultáneas reciben un aviso para reintentar. Si la conversión tarda demasiado o el sticker excede el tamaño permitido, el bot reintenta con videos más cortos. FFmpeg y ffprobe deben estar disponibles en el hosting; el runtime nativo de Render los incluye.

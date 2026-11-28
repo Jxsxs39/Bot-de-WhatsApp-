@@ -1,5 +1,6 @@
 import {styleBotReply} from '../bot-style.js';
 import {SHOP_ITEMS} from './economy.js';
+import {ownerPriority} from './admin.js';
 // Cada objeto contiene el nombre del comando y la función que ejecuta.
 const historiaImageUrl = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQuJNQnSpOsMvWoDllNutNEUIvxnfcTcKNn2oCi76KyjQ&s=10';
 const IMAGE_SEARCH_LIMIT=3;
@@ -252,7 +253,7 @@ export default [
  // Menú dinámico: se actualiza al registrar otro comando.
  {name:'menu', async run(ctx) {
   const {replyWithImage,commands}=ctx;
-  const sections=[['General',['ping','p','menu','id','historia','dato','perfil','stats','calc','chatgpt','pin','img','tag']],['Economía',['work','daily','tienda','comprar','inventario','equipar']],['Stickers',['sticker','s','stiker']]];
+  const sections=[['General',['ping','p','menu','id','historia','dato','perfil','stats','calc','chatgpt','pin','img','tag','pagomovil']],['Economía',['work','daily','tienda','comprar','inventario','equipar']],['Stickers',['sticker','s','stiker']]];
   const known=new Set(sections.flatMap(([,names])=>names));
   sections.push(['Otros',[...commands.keys()].filter(n=>!known.has(n))]);
   const blocks=sections.map(([title,names])=>[title,names.filter(n=>commands.has(n))]);
@@ -272,6 +273,18 @@ export default [
   } catch(error) {
    await reply(`🧮 ${error.message}`);
   }
+ }},
+ {name:'pagomovil', async run({reply,args,userId}) {
+  if(await ownerPriority({userId})<90) return reply('Acceso denegado: solo un owner puede publicar avisos de pago móvil.');
+  const amountInput=(args.at(-1)||'').replace(/^\(/,'').replace(/\)$/,'');
+  const name=args.slice(0,-1).join(' ').replace(/^\(/,'').replace(/\)$/,'').trim();
+  if(!name||!amountInput) return reply('Uso: .pagomovil <nombre de la persona> <monto>. Ejemplo: .pagomovil Ana Pérez 125,50');
+  if(name.length>80||/[\r\n]/.test(name)) return reply('Escribe un nombre de hasta 80 caracteres en una sola línea.');
+  if(!/^\d+(?:[.,]\d{1,2})?$/.test(amountInput)) return reply('El monto debe ser positivo y usar hasta dos decimales, por ejemplo: 125,50.');
+  const amount=Number(amountInput.replace(',','.'));
+  if(!Number.isFinite(amount)||amount<=0||amount>1_000_000_000_000) return reply('El monto indicado no es válido.');
+  const formatted=new Intl.NumberFormat('es-VE',{minimumFractionDigits:2,maximumFractionDigits:2}).format(amount);
+  return reply(`⚠️ *Pago Móvil reportado (no verificado)*\nSe reporta un pago para *${name}* por *Bs. ${formatted}*.\nConfirma el abono en BNC antes de marcarlo como pagado. Este aviso no ejecuta ni verifica una transferencia.`);
  }},
  {name:'tag', async run({reply,args,chatId,userId,rawMessage,sock}) {
   if(!chatId.endsWith('@g.us')) return reply('Este comando solo funciona en grupos.');

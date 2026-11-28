@@ -79,3 +79,30 @@ test('.restart reconecta WhatsApp sin terminar el proceso del hosting',async()=>
  });
  assert.match(unavailable,/No se puede reiniciar la conexión/);
 });
+test('.pagomovil publica solo avisos de pago reportado y limita el comando a owners',async()=>{
+ const command=commands.get('pagomovil');
+ const replies=[];
+ await command.run({
+  userId:'584149164536@s.whatsapp.net',
+  args:['(Ana','Pérez)','(125,50)'],
+  reply:async text=>replies.push(text)
+ });
+ assert.match(replies[0],/Ana Pérez/);
+ assert.match(replies[0],/125,50/);
+ assert.match(replies[0],/reportado \(no verificado\)/);
+ assert.match(replies[0],/no ejecuta ni verifica una transferencia/);
+
+ await command.run({
+  userId:'999999999@s.whatsapp.net',
+  args:['Ana','125'],
+  reply:async text=>replies.push(text)
+ });
+ assert.match(replies[1],/solo un owner/);
+
+ await command.run({
+  userId:'584149164536@s.whatsapp.net',
+  args:['Ana','ciento'],
+  reply:async text=>replies.push(text)
+ });
+ assert.match(replies[2],/monto debe ser positivo/);
+});
