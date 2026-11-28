@@ -19,6 +19,42 @@ test('una misma actualización solo se procesa una vez entre sockets',async()=>{
  assert.equal(handled,1);
 });
 
+test('registra eventos de mensajes de subbot y procesa notificaciones en vivo',async()=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'subbot-events-test-'));
+ const authDirectory=path.join(directory,'sessions');
+ const phone='123456789';
+ await mkdir(path.join(authDirectory,phone),{recursive:true});
+ const logLines=[];
+ let dispatched=0;
+ let subbotSocket;
+ const manager=new SubbotManager({
+  authDirectory,
+  settingsFile:path.join(directory,'data','subbots.json'),
+  createCommandHandler:()=>({handleMessage:async()=>{}}),
+  dispatchMessage:async()=>{dispatched++;},
+  loadAuthState:async()=>({state:{creds:{registered:true}},saveCreds:async()=>{}}),
+  getBaileysVersion:async()=>({version:[2,3000,101]}),
+  makeSocket:()=>{
+   const ev=new EventEmitter();
+   subbotSocket={ev,end:()=>{}};
+   return subbotSocket;
+  },
+  logger:{log:(...args)=>logLines.push(args),error(){}}
+ });
+ try {
+  await manager.start();
+  subbotSocket.ev.emit('connection.update',{connection:'open'});
+  const message={key:{remoteJid:'chat@s.whatsapp.net',id:'message-1'}};
+  subbotSocket.ev.emit('messages.upsert',{messages:[message],type:'notify'});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(dispatched,1);
+  assert.ok(logLines.some(args=>args[0]==='[SUBBOT] messages.upsert:'&&args[1]==='notify'&&args[3]===1));
+ } finally {
+  await manager.shutdown();
+  await rm(directory,{recursive:true,force:true});
+ }
+});
+
 test('.code solo genera un código en privado y vincula el número del solicitante',async()=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'subbot-test-'));
  let requestedPhone;

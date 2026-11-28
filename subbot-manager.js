@@ -273,6 +273,7 @@ export class SubbotManager {
       });
     };
     entry.onMessages = ({ messages, type }) => {
+      this.logger.log('[SUBBOT] messages.upsert:', type, 'cantidad:', messages.length);
       if (type !== 'notify' || this.stopping || !entry.registered) return;
       entry.queue = entry.queue.then(async () => {
         for (const message of messages) {
